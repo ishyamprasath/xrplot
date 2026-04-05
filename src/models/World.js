@@ -1,0 +1,49 @@
+import mongoose from 'mongoose';
+
+const ImageSchema = new mongoose.Schema({
+  url: { type: String, required: true },
+  publicId: { type: String, required: true },
+  classification: { type: String, default: '' }, // front, back, left, right, ceiling, floor, corner
+});
+
+const NodeSchema = new mongoose.Schema({
+  id: { type: String, required: true },
+  label: { type: String, default: 'New Space' },
+  position: {
+    x: { type: Number, default: 0 },
+    y: { type: Number, default: 0 },
+  },
+  images: [ImageSchema],
+  panoramaUrl: { type: String, default: '' },
+  panoramaPublicId: { type: String, default: '' },
+  status: {
+    type: String,
+    enum: ['empty', 'uploaded', 'analyzing', 'stitching', 'ready', 'error'],
+    default: 'empty',
+  },
+});
+
+const EdgeSchema = new mongoose.Schema({
+  id: { type: String, required: true },
+  source: { type: String, required: true },
+  target: { type: String, required: true },
+  transitionImages: [ImageSchema],
+  transitionPanorama: { type: String, default: '' },
+  status: {
+    type: String,
+    enum: ['empty', 'uploaded', 'ready'],
+    default: 'empty',
+  },
+});
+
+const WorldSchema = new mongoose.Schema({
+  userId: { type: String, required: true, index: true },
+  name: { type: String, required: true, default: 'Untitled World' },
+  description: { type: String, default: '' },
+  nodes: [NodeSchema],
+  edges: [EdgeSchema],
+}, {
+  timestamps: true,
+});
+
+export default mongoose.models.World || mongoose.model('World', WorldSchema);

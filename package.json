@@ -1,0 +1,29 @@
+{
+  "name": "xrplot",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@clerk/nextjs": "^6.0.0",
+    "@clerk/themes": "^2.0.0",
+    "@google/generative-ai": "^0.21.0",
+    "@xyflow/react": "^12.0.0",
+    "cloudinary": "^2.5.0",
+    "mongoose": "^8.8.0",
+    "next": "latest",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "sharp": "^0.33.0",
+    "three": "^0.170.0",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "eslint": "^9",
+    "eslint-config-next": "latest"
+  }
+}
