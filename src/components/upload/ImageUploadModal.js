@@ -130,7 +130,7 @@ export default function ImageUploadModal({ type, worldId, itemId, existingImages
     <div className="modal-overlay" onClick={!isProcessing ? onClose : undefined}>
       <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 700 }}>
         <div className="modal-header">
-          <h2>{type === 'node' ? '📸 Upload Space Images' : '🔗 Upload Transition Images'}</h2>
+          <h2>{type === 'node' ? 'Upload Space Images' : 'Upload Transition Images'}</h2>
           {!isProcessing && <button className="modal-close" onClick={onClose}>×</button>}
         </div>
 
@@ -176,7 +176,7 @@ export default function ImageUploadModal({ type, worldId, itemId, existingImages
               onDragLeave={() => setDragging(false)}
               onDrop={handleDrop}
             >
-              <div className="upload-zone-icon">📁</div>
+              <div className="upload-zone-icon" style={{ fontSize: '1.8rem', opacity: 0.5 }}>+</div>
               <p>Drag & drop images here or <span className="highlight">browse files</span></p>
               <p style={{ fontSize: '0.75rem', marginTop: 8 }}>{minImages}-{maxImages} images • JPG, PNG, WebP</p>
             </div>
@@ -225,7 +225,7 @@ export default function ImageUploadModal({ type, worldId, itemId, existingImages
         {/* Analysis results */}
         {analysis && (
           <div style={{ marginTop: 'var(--space-md)' }}>
-            <h3 style={{ fontSize: '1rem', marginBottom: 'var(--space-sm)' }}>🤖 AI Analysis</h3>
+            <h3 style={{ fontSize: '1rem', marginBottom: 'var(--space-sm)' }}>AI Analysis</h3>
             
             {/* Coverage */}
             <div style={{ marginBottom: 'var(--space-md)' }}>
@@ -240,12 +240,12 @@ export default function ImageUploadModal({ type, worldId, itemId, existingImages
               </div>
               {analysis.coverage?.covered?.length > 0 && (
                 <p style={{ fontSize: '0.8rem', color: 'var(--green-light)' }}>
-                  ✅ Covered: {analysis.coverage.covered.join(', ')}
+                  Covered: {analysis.coverage.covered.join(', ')}
                 </p>
               )}
               {analysis.coverage?.missing?.length > 0 && (
                 <p style={{ fontSize: '0.8rem', color: 'var(--amber-light)' }}>
-                  ⚠️ Missing: {analysis.coverage.missing.join(', ')}
+                  Missing: {analysis.coverage.missing.join(', ')}
                 </p>
               )}
             </div>
@@ -266,7 +266,7 @@ export default function ImageUploadModal({ type, worldId, itemId, existingImages
             {/* Suggestions */}
             {analysis.coverage?.suggestions?.length > 0 && (
               <div className="analysis-suggestion">
-                💡 {analysis.coverage.suggestions.join(' • ')}
+                {analysis.coverage.suggestions.join(' • ')}
               </div>
             )}
           </div>
@@ -275,7 +275,7 @@ export default function ImageUploadModal({ type, worldId, itemId, existingImages
         {/* Error */}
         {error && (
           <p style={{ color: 'var(--red-light)', fontSize: '0.85rem', marginTop: 'var(--space-sm)' }}>
-            ⚠️ {error}
+            {error}
           </p>
         )}
 
@@ -290,7 +290,7 @@ export default function ImageUploadModal({ type, worldId, itemId, existingImages
                   className="btn btn-secondary"
                   onClick={type === 'node' ? handleAnalyze : handleStitch}
                 >
-                  {type === 'node' ? '🤖 Analyze & Continue' : '🧵 Stitch Existing'}
+                  {type === 'node' ? 'Analyze & Continue' : 'Stitch Existing'}
                 </button>
               )}
 
@@ -300,7 +300,7 @@ export default function ImageUploadModal({ type, worldId, itemId, existingImages
                 disabled={images.length < minImages}
                 style={{ display: images.length > 0 ? 'inline-block' : 'none' }}
               >
-                📤 Upload{type === 'node' ? ' & Analyze' : ''}
+                Upload{type === 'node' ? ' & Analyze' : ''}
                 <span style={{ fontSize: '0.75rem', opacity: 0.7, marginLeft: 4 }}>
                   ({images.length}/{minImages} min)
                 </span>
@@ -311,7 +311,7 @@ export default function ImageUploadModal({ type, worldId, itemId, existingImages
             <>
               <button className="btn btn-ghost" onClick={onClose}>Close</button>
               <button className="btn btn-primary" onClick={handleStitch}>
-                🧵 Stitch 360 Panorama
+                Stitch 360 Panorama
               </button>
             </>
           )}

@@ -802,19 +802,20 @@ a:hover {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-secondary);
+  background: #ffffff;
+  border: 1.5px solid #1a1a2e;
+  color: #1a1a2e;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all var(--transition-fast);
   font-size: 1rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
 }
 .modal-close:hover {
-  background: var(--bg-card-hover);
-  color: var(--text-primary);
+  background: #f0f0f0;
+  color: #000000;
 }
 .modal-actions {
   display: flex;

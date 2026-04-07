@@ -3,6 +3,7 @@
 import { useUser, UserButton } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useCallback } from 'react';
+import { Globe, Plus, MapPin, Link2, Edit2, Trash2, Sparkles, Hexagon } from 'lucide-react';
 
 export default function DashboardPage() {
   const { user } = useUser();
@@ -73,11 +74,12 @@ export default function DashboardPage() {
   return (
     <>
       <div className="animated-bg" />
-      
+
       {/* Navbar */}
       <nav className="navbar">
         <div className="navbar-brand">
-          🌍 <span>XRPlot</span>
+          <Hexagon size={24} className="brand-icon" strokeWidth={2.5} />
+          <span>XRPlot</span>
         </div>
         <UserButton afterSignOutUrl="/sign-in" />
       </nav>
@@ -92,7 +94,7 @@ export default function DashboardPage() {
             </p>
           </div>
           <button className="btn btn-primary btn-lg" onClick={() => setShowCreate(true)}>
-            ✦ Create New World
+            <Plus size={18} /> Create New World
           </button>
         </div>
 
@@ -108,11 +110,13 @@ export default function DashboardPage() {
           </div>
         ) : worlds.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-state-icon">🌌</div>
+            <div className="empty-state-icon">
+              <Globe size={64} strokeWidth={1.5} />
+            </div>
             <h2>No worlds yet</h2>
             <p>Create your first 360° world and start building immersive experiences from your photos.</p>
             <button className="btn btn-primary btn-lg" onClick={() => setShowCreate(true)}>
-              ✦ Create Your First World
+              <Plus size={18} /> Create Your First World
             </button>
           </div>
         ) : (
@@ -131,13 +135,13 @@ export default function DashboardPage() {
                       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                     />
                   ) : (
-                    '🌍'
+                    <Globe size={48} strokeWidth={1.5} />
                   )}
                 </div>
                 <div className="world-card-name">{world.name}</div>
                 <div className="world-card-meta">
-                  <span>📍 {world.nodes?.length || 0} spaces</span>
-                  <span>🔗 {world.edges?.length || 0} connections</span>
+                  <span><MapPin size={12} /> {world.nodes?.length || 0} spaces</span>
+                  <span><Link2 size={12} /> {world.edges?.length || 0} connections</span>
                 </div>
                 <div className="world-card-meta" style={{ marginTop: 4 }}>
                   <span>Updated {formatDate(world.updatedAt)}</span>
@@ -148,13 +152,13 @@ export default function DashboardPage() {
                     style={{ flex: 1 }}
                     onClick={() => router.push(`/worlds/${world._id}`)}
                   >
-                    ✏️ Edit
+                    <Edit2 size={14} /> Edit
                   </button>
                   <button
                     className="btn btn-danger"
                     onClick={() => setShowDelete(world._id)}
                   >
-                    🗑️
+                    <Trash2 size={14} />
                   </button>
                 </div>
               </div>
@@ -168,7 +172,7 @@ export default function DashboardPage() {
         <div className="modal-overlay" onClick={() => setShowCreate(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>✦ Create New World</h2>
+              <h2><Sparkles size={20} /> Create New World</h2>
               <button className="modal-close" onClick={() => setShowCreate(false)}>×</button>
             </div>
             <form onSubmit={handleCreate} className="create-world-form">
@@ -188,7 +192,7 @@ export default function DashboardPage() {
                   Cancel
                 </button>
                 <button type="submit" className="btn btn-primary" disabled={creating || !newWorldName.trim()}>
-                  {creating ? <><span className="spinner" style={{ width: 16, height: 16 }} /> Creating...</> : '✦ Create World'}
+                  {creating ? <><span className="spinner" style={{ width: 16, height: 16 }} /> Creating...</> : <><Plus size={16} /> Create World</>}
                 </button>
               </div>
             </form>
@@ -201,7 +205,7 @@ export default function DashboardPage() {
         <div className="modal-overlay" onClick={() => setShowDelete(null)}>
           <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 400 }}>
             <div className="confirm-dialog">
-              <h2 style={{ marginBottom: 'var(--space-md)' }}>🗑️ Delete World?</h2>
+              <h2 style={{ marginBottom: 'var(--space-md)' }}><Trash2 size={24} style={{ color: 'var(--red-light)' }} /> Delete World?</h2>
               <p>This will permanently delete this world and all its images. This action cannot be undone.</p>
               <div className="modal-actions">
                 <button className="btn btn-ghost" onClick={() => setShowDelete(null)}>Cancel</button>

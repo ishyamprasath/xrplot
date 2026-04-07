@@ -3,7 +3,9 @@ import mongoose from 'mongoose';
 const ImageSchema = new mongoose.Schema({
   url: { type: String, required: true },
   publicId: { type: String, required: true },
-  classification: { type: String, default: '' }, // front, back, left, right, ceiling, floor, corner
+  classification: { type: String, default: '' },
+  originalUrl: { type: String, default: '' },
+  originalPublicId: { type: String, default: '' },
 });
 
 const NodeSchema = new mongoose.Schema({
@@ -16,6 +18,8 @@ const NodeSchema = new mongoose.Schema({
   images: [ImageSchema],
   panoramaUrl: { type: String, default: '' },
   panoramaPublicId: { type: String, default: '' },
+  originalPanoramaUrl: { type: String, default: '' },
+  originalPanoramaPublicId: { type: String, default: '' },
   status: {
     type: String,
     enum: ['empty', 'uploaded', 'analyzing', 'stitching', 'ready', 'error'],

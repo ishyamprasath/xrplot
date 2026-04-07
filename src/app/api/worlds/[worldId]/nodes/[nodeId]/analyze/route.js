@@ -18,7 +18,7 @@ export async function POST(request, { params }) {
     const world = await World.findOne({ _id: worldId, userId });
     if (!world) return NextResponse.json({ error: 'World not found' }, { status: 404 });
 
-    const node = world.nodes.find(n => n.id === nodeId);
+    const node = world.nodes.find(n => String(n.id) === String(nodeId));
     if (!node) return NextResponse.json({ error: 'Node not found' }, { status: 404 });
 
     if (!node.images || node.images.length === 0) {
@@ -99,12 +99,13 @@ Respond ONLY in this exact JSON format:
     }
 
     // Update image classifications
-    if (analysis.classifications) {
+    if (analysis.classifications && Array.isArray(node.images)) {
       for (const cls of analysis.classifications) {
         if (node.images[cls.index]) {
           node.images[cls.index].classification = cls.direction;
         }
       }
+      world.markModified('nodes');
     }
 
     node.status = 'uploaded'; // Ready for stitching
