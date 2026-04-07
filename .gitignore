@@ -29,6 +29,7 @@ yarn-error.log*
 .env*.local
 .env
 .env.production
+add_env_vars.ps1
 
 # vercel
 .vercel
