@@ -80,9 +80,15 @@ function SpaceNode({ id, data, selected }) {
       <div className="space-node-actions">
         <button
           className="btn btn-secondary"
+          onClick={(e) => { e.stopPropagation(); dispatch('openCapture'); }}
+        >
+          📷 Capture
+        </button>
+        <button
+          className="btn btn-secondary"
           onClick={(e) => { e.stopPropagation(); dispatch('openUpload'); }}
         >
-          📸 Upload
+          � Upload
         </button>
         <button
           className="btn btn-primary"

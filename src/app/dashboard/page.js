@@ -91,9 +91,18 @@ export default function DashboardPage() {
               Welcome back{user?.firstName ? `, ${user.firstName}` : ''}! Build immersive 360° experiences.
             </p>
           </div>
-          <button className="btn btn-primary btn-lg" onClick={() => setShowCreate(true)}>
-            ✦ Create New World
-          </button>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button
+              className="btn btn-secondary"
+              onClick={() => router.push('/create-tour')}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+            >
+              🌐 Create Tour with AI
+            </button>
+            <button className="btn btn-primary btn-lg" onClick={() => setShowCreate(true)}>
+              ✦ New World
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -111,9 +120,17 @@ export default function DashboardPage() {
             <div className="empty-state-icon">🌌</div>
             <h2>No worlds yet</h2>
             <p>Create your first 360° world and start building immersive experiences from your photos.</p>
-            <button className="btn btn-primary btn-lg" onClick={() => setShowCreate(true)}>
-              ✦ Create Your First World
-            </button>
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
+              <button
+                className="btn btn-secondary btn-lg"
+                onClick={() => router.push('/create-tour')}
+              >
+                🌐 Create Tour with AI Camera
+              </button>
+              <button className="btn btn-primary btn-lg" onClick={() => setShowCreate(true)}>
+                ✦ Create Empty World
+              </button>
+            </div>
           </div>
         ) : (
           <div className="worlds-grid">

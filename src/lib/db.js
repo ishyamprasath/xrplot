@@ -1,11 +1,5 @@
 import mongoose from 'mongoose';
 
-const MONGO_URI = process.env.MONGO_URI;
-
-if (!MONGO_URI) {
-  throw new Error('Please define the MONGO_URI environment variable in .env');
-}
-
 let cached = global.mongoose;
 
 if (!cached) {
@@ -13,6 +7,14 @@ if (!cached) {
 }
 
 async function connectDB() {
+  const MONGO_URI = process.env.MONGO_URI;
+
+  if (!MONGO_URI || MONGO_URI.includes('your_user')) {
+    throw new Error(
+      'MONGO_URI is not configured. Please add your MongoDB connection string to .env.local'
+    );
+  }
+
   if (cached.conn) {
     return cached.conn;
   }

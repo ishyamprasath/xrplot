@@ -16,6 +16,7 @@ import SpaceNode from './SpaceNode';
 import ConnectionEdge from './ConnectionEdge';
 import ImageUploadModal from '../upload/ImageUploadModal';
 import ViewerModal from '../viewer/ViewerModal';
+import TourCapture from '../capture/TourCapture';
 import { v4 as uuidv4 } from 'uuid';
 
 const nodeTypes = { spaceNode: SpaceNode };
@@ -65,6 +66,7 @@ export default function WorldCanvas({ world, onSave, saving, lastSaved, onBack, 
   const [worldName, setWorldName] = useState(world.name);
   const [uploadModal, setUploadModal] = useState(null); // { type: 'node'|'edge', id, data }
   const [viewerModal, setViewerModal] = useState(null); // { panoramaUrl, label }
+  const [captureModal, setCaptureModal] = useState(null); // { nodeId, data }
   const [doubleClickNode, setDoubleClickNode] = useState(null);
   const saveTimerRef = useRef(null);
   const nodesRef = useRef(nodes);
@@ -213,6 +215,17 @@ export default function WorldCanvas({ world, onSave, saving, lastSaved, onBack, 
   useEffect(() => {
     const handler = (e) => {
       const { type, nodeId, edgeId, data } = e.detail;
+      if (type === 'openCapture') {
+        // Save before capture so the node exists in DB
+        doSave();
+        setTimeout(() => {
+          const node = nodes.find(n => n.id === nodeId);
+          if (node) {
+            setCaptureModal({ nodeId, data: node.data });
+          }
+        }, 300);
+        return;
+      }
       if (type === 'openUpload') {
         // Save before upload so the node exists in DB
         doSave();
@@ -248,6 +261,44 @@ export default function WorldCanvas({ world, onSave, saving, lastSaved, onBack, 
     window.addEventListener('xrplot-action', handler);
     return () => window.removeEventListener('xrplot-action', handler);
   }, [nodes, edges, setNodes, triggerSave, doSave]);
+
+  // Handle TourCapture completion — receives the final panoramaUrl from Gemini fusion
+  const handleCaptureComplete = useCallback(async (panoramaUrl) => {
+    if (!captureModal || !panoramaUrl) return;
+
+    try {
+      // Update the node directly with the stitched panorama URL
+      setNodes(nds => nds.map(n =>
+        n.id === captureModal.nodeId
+          ? { ...n, data: { ...n.data, panoramaUrl, status: 'ready' } }
+          : n
+      ));
+
+      // Persist to DB via the worlds API
+      const worldNodes = nodesRef.current.map(n => ({
+        id: n.id,
+        label: n.data.label,
+        position: n.position,
+        images: n.data.images || [],
+        panoramaUrl: n.id === captureModal.nodeId ? panoramaUrl : (n.data.panoramaUrl || ''),
+        panoramaPublicId: n.data.panoramaPublicId || '',
+        status: n.id === captureModal.nodeId ? 'ready' : (n.data.status || 'empty'),
+      }));
+      const worldEdges = edgesRef.current.map(e => ({
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        transitionImages: e.data?.transitionImages || [],
+        transitionPanorama: e.data?.transitionPanorama || '',
+        status: e.data?.status || 'empty',
+      }));
+      await onSave({ name: worldNameRef.current, nodes: worldNodes, edges: worldEdges });
+    } catch (error) {
+      console.error('[WorldCanvas] Error saving captured panorama:', error);
+    } finally {
+      setCaptureModal(null);
+    }
+  }, [captureModal, setNodes, onSave]);
 
   // After upload completes, refresh world data
   const handleUploadComplete = useCallback(async () => {
@@ -356,6 +407,14 @@ export default function WorldCanvas({ world, onSave, saving, lastSaved, onBack, 
           />
         </ReactFlow>
       </div>
+
+      {/* AI Tour Capture Modal (24-shot Cloudinary + Gemini 3.1 fusion) */}
+      {captureModal && (
+        <TourCapture
+          onTourReady={handleCaptureComplete}
+          onClose={() => setCaptureModal(null)}
+        />
+      )}
 
       {/* Upload Modal */}
       {uploadModal && (

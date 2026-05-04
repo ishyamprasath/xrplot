@@ -35,3 +35,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# clerk configuration (can include secrets)
+/.clerk/
+
+# GCP Service Account key files — NEVER commit these
+gcp-key.json
+*-key.json
+*.service-account.json

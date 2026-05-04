@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 
-const PanoramaViewer = dynamic(() => import('./PanoramaViewer'), { ssr: false });
+const PannellumViewer = dynamic(() => import('./PannellumViewer'), { ssr: false });
 
 export default function WorldViewer({ world, onExit }) {
   const readyNodes = (world.nodes || []).filter(n => n.panoramaUrl && n.status === 'ready');
@@ -25,6 +25,27 @@ export default function WorldViewer({ world, onExit }) {
   }, [currentNodeId, world]);
 
   const connections = getConnections();
+
+  // Generate hotspots for Pannellum
+  const generateHotspots = useCallback(() => {
+    return connections.map(({ edge, node }) => ({
+      pitch: -10, // Slightly below horizon
+      yaw: calculateYaw(node), // Calculate yaw based on node position
+      type: 'scene',
+      text: node.label,
+      sceneId: node.id,
+      targetPitch: 0,
+      targetYaw: 0
+    }));
+  }, [connections]);
+
+  // Calculate yaw based on node position (simple implementation)
+  const calculateYaw = useCallback((node) => {
+    // For now, distribute hotspots evenly around 360 degrees
+    const index = readyNodes.findIndex(n => n.id === node.id);
+    if (index === -1) return 0;
+    return (index * 360 / readyNodes.length) - 180;
+  }, [readyNodes]);
 
   const navigateTo = useCallback((nodeId) => {
     setTransitioning(true);
@@ -57,7 +78,11 @@ export default function WorldViewer({ world, onExit }) {
       }} />
 
       {/* Panorama */}
-      <PanoramaViewer imageUrl={currentNode.panoramaUrl} />
+      <PannellumViewer 
+        imageUrl={currentNode.panoramaUrl} 
+        hotspots={generateHotspots()}
+        onHotspotClick={(hotspot) => navigateTo(hotspot.sceneId)}
+      />
 
       {/* Top overlay */}
       <div className="viewer-overlay">
