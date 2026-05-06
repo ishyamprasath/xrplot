@@ -257,6 +257,10 @@ export default function TourCapture({ onTourReady, onClose }) {
       return;
     }
 
+    // Trigger flash immediately
+    setFlashActive(true);
+    const flashTimer = setTimeout(() => setFlashActive(false), 250);
+
     const canvas = document.createElement('canvas');
     const MAX_W = 1280;
     const scale = Math.min(1, MAX_W / video.videoWidth);
@@ -270,16 +274,25 @@ export default function TourCapture({ onTourReady, onClose }) {
 
     const base64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
 
-    setFlashActive(true);
-    setTimeout(() => setFlashActive(false), 200);
-
     setCaptured(prev => {
+      // Prevent capturing more than TOTAL shots
+      if (Object.keys(prev).length >= TOTAL) {
+        setCameraError(`Maximum ${TOTAL} shots reached. Click "Generate Tour" to finish.`);
+        return prev;
+      }
       const next = { ...prev, [activeShot]: base64 };
-      // Auto-advance to next uncaptured shot
+      // Show captured success indicator
+      setJustCaptured(true);
+      setTimeout(() => setJustCaptured(false), 1000);
+      // Auto-advance to next uncaptured shot after a brief delay
       const nextShot = SHOTS.find(s => !(s.id in next));
-      if (nextShot) setActiveShot(nextShot.id);
+      if (nextShot) {
+        setTimeout(() => setActiveShot(nextShot.id), 500);
+      }
       return next;
     });
+
+    return () => clearTimeout(flashTimer);
   }, [activeShot]);
 
   // ── Retake a specific shot ────────────────────────────────────────────────
@@ -308,8 +321,15 @@ export default function TourCapture({ onTourReady, onClose }) {
     });
 
     if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error?.message || 'Cloudinary upload failed');
+      const err = await res.json().catch(() => ({}));
+      const message = err.error?.message || `Cloudinary upload failed (${res.status})`;
+      // Mark as preset error so we can fallback
+      if (message.toLowerCase().includes('preset') || res.status === 400) {
+        const error = new Error(message);
+        error.isPresetError = true;
+        throw error;
+      }
+      throw new Error(message);
     }
 
     const data = await res.json();
@@ -377,18 +397,55 @@ export default function TourCapture({ onTourReady, onClose }) {
         return;
       }
 
-      // 2. Upload all 24 shots directly to Cloudinary (bypasses Vercel 4.5MB limit)
+      // 2. Upload all 24 shots — try Cloudinary first, fallback to server upload
       const imageUrls = [];
+      let useServerFallback = false;
+      
       for (let i = 0; i < SHOTS.length; i++) {
         const shot = SHOTS[i];
         const base64 = captured[shot.id];
         if (!base64) continue;
 
         setUploadProgress({ current: i + 1, total: TOTAL });
+
+        // If we already know preset is bad, skip Cloudinary and use server directly
+        if (useServerFallback) {
+          setDebugMsg(`Uploading shot ${i + 1}/${TOTAL} to server...`);
+          const res = await fetch('/api/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: base64 }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || `Upload failed for shot ${i+1}`);
+          imageUrls.push(data.url);
+          continue;
+        }
+
         setDebugMsg(`Uploading shot ${i + 1}/${TOTAL} to Cloudinary...`);
 
-        const url = await uploadToCloudinary(base64, cloudName, uploadPreset);
-        imageUrls.push(url);
+        try {
+          const url = await uploadToCloudinary(base64, cloudName, uploadPreset);
+          imageUrls.push(url);
+        } catch (uploadErr) {
+          // If preset not found, mark fallback and retry this image via server
+          if (uploadErr.isPresetError || uploadErr.message?.toLowerCase().includes('preset')) {
+            setDebugMsg('Cloudinary preset not found, switching to server upload...');
+            useServerFallback = true;
+            // Retry this same image via server
+            setDebugMsg(`Uploading shot ${i + 1}/${TOTAL} to server...`);
+            const res = await fetch('/api/upload', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ image: base64 }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || `Upload failed for shot ${i+1}`);
+            imageUrls.push(data.url);
+          } else {
+            throw uploadErr;
+          }
+        }
       }
 
       // 3. Send URLs to stitching API (small JSON, well under Vercel limit)
@@ -416,251 +473,235 @@ export default function TourCapture({ onTourReady, onClose }) {
     }
   }, [captured, captureCount, onTourReady, stopCamera]);
 
-  // ── Alignment arrow component ─────────────────────────────────────────────
-  function AlignmentArrow({ yaw, pitch }) {
-    const rotation = -yaw; // counter-rotate so arrow points in yaw direction
+  // ── Alignment guidance overlay (mobile-first, large and clear) ─────────────
+  function AlignmentGuide({ yaw, pitch, label, dir }) {
+    const rotation = -yaw;
     const pitchText = pitchToTilt(pitch);
     const compass = yawToCompass(yaw);
 
     return (
-      <div style={{
-        position: 'absolute', top: '16px', left: '50%', transform: 'translateX(-50%)',
-        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px',
-        zIndex: 15, pointerEvents: 'none',
-      }}>
-        <div style={{
-          background: 'rgba(124,58,237,0.9)', color: 'white',
-          padding: '6px 16px', borderRadius: '999px',
-          fontSize: '0.8rem', fontWeight: 700,
-          backdropFilter: 'blur(8px)',
-          display: 'flex', alignItems: 'center', gap: '8px',
-        }}>
-          <span>Shot {activeShot + 1}/{TOTAL}</span>
-          <span style={{ opacity: 0.6 }}>|</span>
-          <span>{compass}</span>
+      <div className="tc-alignment-guide">
+        {/* Progress + Compass pill */}
+        <div className="tc-alignment-pill">
+          <span className="tc-alignment-shot">{activeShot + 1} / {TOTAL}</span>
+          <span className="tc-alignment-divider" />
+          <span className="tc-alignment-compass">{compass}</span>
         </div>
 
-        <div style={{
-          background: 'rgba(0,0,0,0.7)', color: '#ccc',
-          padding: '4px 12px', borderRadius: '8px',
-          fontSize: '0.75rem', maxWidth: '280px', textAlign: 'center',
-        }}>
-          {pitchText}
+        {/* Direction instruction */}
+        <div className="tc-alignment-instruction">
+          <div className="tc-alignment-label">{label}</div>
+          <div className="tc-alignment-dir">{dir}</div>
         </div>
 
-        {/* Compass ring with arrow */}
-        <div style={{
-          width: '80px', height: '80px',
-          border: '2px solid rgba(255,255,255,0.3)',
-          borderRadius: '50%',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          position: 'relative',
-        }}>
-          {/* N label */}
-          <span style={{ position: 'absolute', top: '4px', fontSize: '0.65rem', color: '#ef4444', fontWeight: 700 }}>N</span>
-          {/* Arrow */}
-          <svg width="40" height="40" viewBox="0 0 40 40" style={{ transform: `rotate(${rotation}deg)`, transition: 'transform 0.5s ease' }}>
-            <polygon points="20,4 28,28 20,22 12,28" fill="#7c3aed" opacity="0.9" />
+        {/* Large compass dial */}
+        <div className="tc-compass-dial">
+          <span className="tc-compass-n">N</span>
+          <svg className="tc-compass-arrow" viewBox="0 0 40 40" style={{ transform: `rotate(${rotation}deg)` }}>
+            <polygon points="20,2 32,30 20,24 8,30" fill="#a78bfa" />
           </svg>
         </div>
+
+        {/* Pitch hint */}
+        <div className="tc-pitch-hint">{pitchText}</div>
+      </div>
+    );
+  }
+
+  // ── Shot progress dots (mobile-optimized) ──────────────────────────────────
+  function ShotProgress() {
+    return (
+      <div className="tc-progress-dots">
+        {SHOTS.map(shot => {
+          const done = shot.id in captured;
+          const isActive = shot.id === activeShot;
+          return (
+            <button
+              key={shot.id}
+              className={`tc-progress-dot ${done ? 'done' : ''} ${isActive ? 'active' : ''}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (done) retakeShot(shot.id);
+                else if (isActive && cameraState !== 'live') startCamera();
+              }}
+              title={shot.label}
+              disabled={!done && !isActive}
+            >
+              {done ? (
+                <div className="tc-dot-check">✓</div>
+              ) : (
+                <span className="tc-dot-num">{shot.id + 1}</span>
+              )}
+            </button>
+          );
+        })}
       </div>
     );
   }
 
   const rowLabels = ['Upper Ring (point UP)', 'Mid-Upper Ring (tilt up)', 'Mid-Lower Ring (tilt down)', 'Lower Ring (point DOWN)'];
 
+  const [showMap, setShowMap] = useState(false);
+  const [justCaptured, setJustCaptured] = useState(false);
+
   return (
     <div className="tour-capture-overlay">
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <header className="tc-header">
-        <div className="tc-header-left">
-          <span className="tc-icon">🌐</span>
-          <div>
-            <h2>360° Tour Capture</h2>
-            <p>{captureCount} / {TOTAL} shots captured{allDone ? ' ✅ All done!' : ''}</p>
-          </div>
+      {/* ═══ MOBILE-FIRST LAYOUT ═══ */}
+
+      {/* ── Top bar (minimal) ──────────────────────────────────────────────── */}
+      <header className="tc-topbar">
+        <div className="tc-topbar-left">
+          <span className="tc-topbar-count">{captureCount}/{TOTAL}</span>
+          {allDone && <span className="tc-topbar-done">✅</span>}
         </div>
-        <button className="tc-close-btn" onClick={onClose} aria-label="Close">✕</button>
+        <div className="tc-topbar-center">
+          <span className="tc-topbar-title">360° Capture</span>
+        </div>
+        <button className="tc-topbar-close" onClick={onClose}>✕</button>
       </header>
 
-      {/* ── Progress bar ───────────────────────────────────────────────────── */}
-      <div className="tc-progress-bar-track">
-        <div className="tc-progress-bar-fill" style={{ width: `${(captureCount / TOTAL) * 100}%` }} />
+      {/* ── Shot progress strip ────────────────────────────────────────────── */}
+      <div className="tc-progress-strip">
+        <ShotProgress />
       </div>
 
-      {/* ── Body ───────────────────────────────────────────────────────────── */}
-      <div className="tc-body">
+      {/* ── Main content: camera fills the screen ──────────────────────────── */}
+      <div className="tc-main">
 
-        {/* ── Camera / Viewfinder panel ──────────────────────────────────────── */}
-        <div className="tc-camera-panel">
-          <div className="tc-viewfinder-wrap" style={{ display: cameraState === 'live' || cameraState === 'starting' ? 'block' : 'none' }}>
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              className="tc-video"
-              onLoadedMetadata={() => {
-                console.log('[CAMERA DEBUG] onLoadedMetadata event fired! readyState:', videoRef.current?.readyState);
-              }}
-              onPlay={() => {
-                console.log('[CAMERA DEBUG] onPlay event fired!');
-              }}
-              onError={(e) => {
-                console.error('[CAMERA DEBUG] Video error:', e);
-              }}
-            />
+        {/* Viewfinder / Camera feed */}
+        <div className="tc-viewfinder-wrap" style={{ display: cameraState === 'live' || cameraState === 'starting' ? 'block' : 'none' }}>
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className="tc-video"
+            onLoadedMetadata={() => {
+              console.log('[CAMERA DEBUG] onLoadedMetadata event fired! readyState:', videoRef.current?.readyState);
+            }}
+            onPlay={() => {
+              console.log('[CAMERA DEBUG] onPlay event fired!');
+            }}
+            onError={(e) => {
+              console.error('[CAMERA DEBUG] Video error:', e);
+            }}
+          />
 
-            {flashActive && <div className="tc-flash" />}
+          {flashActive && <div className="tc-flash" />}
 
-            {/* Starting overlay */}
-            {cameraState === 'starting' && (
-              <div style={{
-                position: 'absolute', inset: 0,
-                display: 'flex', flexDirection: 'column',
-                alignItems: 'center', justifyContent: 'center',
-                gap: '12px', zIndex: 12, background: 'rgba(7,7,26,0.85)',
-              }}>
-                <div className="tc-spinner" />
-                <span style={{ color: '#9090c0', fontSize: '0.85rem' }}>Starting camera...</span>
-                {debugMsg && (
-                  <div style={{
-                    fontSize: '0.75rem',
-                    color: debugMsg.includes('ERR') ? '#ff6b6b' : debugMsg.includes('✅') ? '#51cf66' : '#a0a0d0',
-                    background: 'rgba(0,0,0,0.5)',
-                    padding: '6px 12px',
-                    borderRadius: '8px',
-                    maxWidth: '90%',
-                    textAlign: 'center',
-                    fontFamily: 'monospace',
-                  }}>
-                    {debugMsg}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Alignment overlay */}
-            {cameraState === 'live' && (
-              <>
-                <AlignmentArrow yaw={currentShot.yaw} pitch={currentShot.pitch} />
-
-                {/* Crosshair */}
-                <div className="tc-guide-overlay">
-                  <div className="tc-guide-crosshair" />
-                  <div className="tc-guide-ring tc-guide-ring-h" />
-                  <div className="tc-guide-ring tc-guide-ring-v" />
-                </div>
-
-                {/* Capture button */}
-                <button className="tc-capture-btn" onClick={captureFrame} aria-label="Capture photo">
-                  <span className="tc-capture-inner" />
-                </button>
-
-                <button className="tc-stop-btn" onClick={stopCamera}>■ Stop</button>
-              </>
-            )}
-          </div>
-
-          {/* Placeholder / Start screen */}
-          {cameraState !== 'live' && cameraState !== 'starting' && (
-            <div className="tc-camera-placeholder">
-              <div className="tc-placeholder-icon">📷</div>
-              <p style={{ whiteSpace: 'pre-line', textAlign: 'center', lineHeight: 1.6 }}>
-                {cameraError || (
-                  'Stand at the center of the room.\n' +
-                  'Keep your phone perfectly still.\n' +
-                  'Follow the on-screen arrows for each shot.\n' +
-                  'You must capture all 24 shots for best quality.'
-                )}
-              </p>
-              {cameraState === 'idle' && (
-                <button className="tc-btn-primary" onClick={startCamera}>
-                  {captureCount > 0 ? `Resume (shot ${activeShot + 1})` : 'Start Camera'}
-                </button>
-              )}
-              {cameraState === 'starting' && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#9090c0' }}>
-                  <div className="tc-spinner" />
-                  <span>Starting camera...</span>
-                </div>
-              )}
-              {cameraState === 'error' && (
-                <button className="tc-btn-primary" onClick={startCamera}>Retry Camera</button>
-              )}
-              {/* Debug info */}
+          {/* Starting overlay */}
+          {cameraState === 'starting' && (
+            <div className="tc-starting-overlay">
+              <div className="tc-spinner" />
+              <span>Starting camera...</span>
               {debugMsg && (
-                <div style={{
-                  fontSize: '0.72rem',
-                  color: debugMsg.includes('ERR') ? '#ff6b6b' : debugMsg.includes('✅') ? '#51cf66' : '#7070a0',
-                  marginTop: '8px',
-                  background: 'rgba(0,0,0,0.3)',
-                  padding: '4px 10px',
-                  borderRadius: '6px',
-                  fontFamily: 'monospace',
-                  maxWidth: '100%',
-                }}>
-                  Debug: {debugMsg}
-                </div>
+                <div className="tc-starting-debug">{debugMsg}</div>
               )}
             </div>
           )}
-        </div>
 
-        {/* ── Shot grid ────────────────────────────────────────────────────── */}
-        <div className="tc-grid-panel">
-          <h3 className="tc-grid-title">Shot Map — Capture all 24</h3>
+          {/* Alignment overlay */}
+          {cameraState === 'live' && (
+            <>
+              <AlignmentGuide yaw={currentShot.yaw} pitch={currentShot.pitch} label={currentShot.label} dir={currentShot.dir} />
 
-          {[0, 1, 2, 3].map(rowIdx => {
-            const rowShots = SHOTS.filter(s => s.row === rowIdx);
-            return (
-              <div key={rowIdx} className="tc-grid-row">
-                <span className="tc-row-label">{rowLabels[rowIdx]}</span>
-                <div className="tc-row-shots">
-                  {rowShots.map(shot => {
-                    const done = shot.id in captured;
-                    const isActive = shot.id === activeShot;
-                    const isClickable = done || (isActive && cameraState === 'live');
-                    return (
-                      <button
-                        key={shot.id}
-                        className={`tc-shot-cell ${done ? 'done' : ''} ${isActive ? 'active' : ''}`}
-                        onClick={() => {
-                          if (done) retakeShot(shot.id);
-                          else if (isActive && cameraState !== 'live') startCamera();
-                        }}
-                        title={shot.label}
-                        disabled={!isClickable && !done}
-                        style={{ opacity: !isClickable && !done ? 0.4 : 1 }}
-                      >
-                        {done ? (
-                          <img
-                            src={`data:image/jpeg;base64,${captured[shot.id]}`}
-                            alt={shot.label}
-                            className="tc-shot-thumb"
-                          />
-                        ) : (
-                          <span className="tc-shot-num">{shot.id + 1}</span>
-                        )}
-                        {done && (
-                          <button
-                            className="tc-retake-btn"
-                            onClick={e => { e.stopPropagation(); retakeShot(shot.id); }}
-                            title="Retake"
-                          >↺</button>
-                        )}
-                      </button>
-                    );
-                  })}
+              {/* Captured success indicator */}
+              {justCaptured && (
+                <div className="tc-captured-toast">
+                  <span>✓ Captured!</span>
                 </div>
+              )}
+
+              {/* Center crosshair */}
+              <div className="tc-guide-overlay">
+                <div className="tc-guide-crosshair" />
+                <div className="tc-guide-ring tc-guide-ring-h" />
+                <div className="tc-guide-ring tc-guide-ring-v" />
               </div>
-            );
-          })}
+
+              {/* Stop button (top-right) */}
+              <button className="tc-stop-btn" onClick={stopCamera}>✕</button>
+            </>
+          )}
         </div>
+
+        {/* Placeholder / Start screen */}
+        {cameraState !== 'live' && cameraState !== 'starting' && (
+          <div className="tc-camera-placeholder">
+            <div className="tc-placeholder-icon">📷</div>
+            <h3 className="tc-placeholder-title">{cameraError ? 'Camera Error' : 'Ready to Capture'}</h3>
+            <p className="tc-placeholder-text">
+              {cameraError || (
+                'Stand at the center of the room. Keep your phone still. Follow the arrows for each of the 24 shots.'
+              )}
+            </p>
+            {cameraState === 'idle' && (
+              <button className="tc-btn-primary tc-btn-large" onClick={startCamera}>
+                {captureCount > 0 ? `Resume Shot ${activeShot + 1}` : '📷 Start Camera'}
+              </button>
+            )}
+            {cameraState === 'error' && (
+              <button className="tc-btn-primary tc-btn-large" onClick={startCamera}>Retry Camera</button>
+            )}
+            {debugMsg && (
+              <div className="tc-debug-msg">Debug: {debugMsg}</div>
+            )}
+          </div>
+        )}
+
+        {/* Shot map toggle (mobile) */}
+        {cameraState === 'live' && (
+          <button className="tc-map-toggle" onClick={() => setShowMap(!showMap)}>
+            {showMap ? 'Hide Map ↑' : `Show Map (${captureCount}/${TOTAL}) ↓`}
+          </button>
+        )}
       </div>
 
-      {/* ── Footer ─────────────────────────────────────────────────────────── */}
-      <footer className="tc-footer">
+      {/* ── Shot map panel (collapsible on mobile, side panel on desktop) ──── */}
+      <div className={`tc-map-panel ${showMap ? 'open' : ''}`}>
+        <div className="tc-map-header">
+          <h3>Shot Map</h3>
+          <button className="tc-map-close" onClick={() => setShowMap(false)}>✕</button>
+        </div>
+        {[0, 1, 2, 3].map(rowIdx => {
+          const rowShots = SHOTS.filter(s => s.row === rowIdx);
+          return (
+            <div key={rowIdx} className="tc-grid-row">
+              <span className="tc-row-label">{rowLabels[rowIdx]}</span>
+              <div className="tc-row-shots">
+                {rowShots.map(shot => {
+                  const done = shot.id in captured;
+                  const isActive = shot.id === activeShot;
+                  const isClickable = done || (isActive && cameraState === 'live');
+                  return (
+                    <button
+                      key={shot.id}
+                      className={`tc-shot-cell ${done ? 'done' : ''} ${isActive ? 'active' : ''}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (done) retakeShot(shot.id);
+                        else if (isActive && cameraState !== 'live') startCamera();
+                      }}
+                      title={shot.label}
+                      disabled={!isClickable && !done}
+                      style={{ opacity: !isClickable && !done ? 0.4 : 1 }}
+                    >
+                      {done ? (
+                        <span className="tc-shot-check">✓</span>
+                      ) : (
+                        <span className="tc-shot-num">{shot.id + 1}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── Bottom action bar ──────────────────────────────────────────────── */}
+      <footer className="tc-bottombar">
         {stitchError && (
           <div className="tc-error-banner">⚠ {stitchError}</div>
         )}
@@ -670,11 +711,41 @@ export default function TourCapture({ onTourReady, onClose }) {
             <div className="tc-spinner" />
             <span>
               {uploadProgress.current < uploadProgress.total
-                ? `Uploading shot ${uploadProgress.current} of ${uploadProgress.total} to Cloudinary...`
-                : `Fusing ${TOTAL} images with Gemini AI...`}
+                ? `Uploading ${uploadProgress.current}/${uploadProgress.total}...`
+                : `Fusing ${TOTAL} images with AI...`}
             </span>
           </div>
+        ) : cameraState === 'live' ? (
+          /* Big capture button when camera is live */
+          <div className="tc-capture-bar">
+            <button 
+              className="tc-capture-btn-large"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (allDone) {
+                  stopCamera();
+                } else {
+                  captureFrame();
+                }
+              }}
+              aria-label={allDone ? "All shots complete" : "Capture photo"}
+              disabled={isStitching}
+            >
+              <div className={`tc-capture-ring ${allDone ? 'complete' : ''}`}>
+                <div className={`tc-capture-inner ${allDone ? 'complete' : ''}`} />
+              </div>
+              <span className="tc-capture-label">
+                {allDone 
+                  ? '✅ All Done! Tap to Finish'
+                  : justCaptured 
+                    ? 'Captured!' 
+                    : `Shot ${activeShot + 1}: Tap to Capture`}
+              </span>
+            </button>
+          </div>
         ) : (
+          /* Footer buttons when not capturing */
           <div className="tc-footer-actions">
             <button className="tc-btn-ghost" onClick={onClose} disabled={isStitching}>
               Cancel
@@ -686,150 +757,386 @@ export default function TourCapture({ onTourReady, onClose }) {
               title={!allDone ? `Complete all 24 shots (${captureCount}/${TOTAL})` : 'Generate 360° panorama'}
             >
               {allDone
-                ? '✨ Generate 360° Virtual Tour'
-                : `Complete all shots (${captureCount}/${TOTAL})`}
+                ? '✨ Generate Tour'
+                : `${captureCount}/${TOTAL} Shots`}
             </button>
           </div>
         )}
       </footer>
 
-      {/* ── Inline styles ──────────────────────────────────────────────────── */}
+      {/* ── Inline styles ── MOBILE-FIRST DESIGN ─────────────────────────── */}
       <style jsx>{`
+        /* ===== BASE LAYOUT ===== */
         .tour-capture-overlay {
           position: fixed; inset: 0; z-index: 9000;
           background: #07071a;
           display: flex; flex-direction: column;
-          font-family: 'Inter', system-ui, sans-serif;
+          font-family: 'Inter', system-ui, -apple-system, sans-serif;
           color: #e8e8f8;
+          overflow: hidden;
         }
-        .tc-header {
+
+        /* ===== TOP BAR (minimal) ===== */
+        .tc-topbar {
           display: flex; align-items: center; justify-content: space-between;
-          padding: 14px 24px;
-          background: rgba(255,255,255,0.04);
-          border-bottom: 1px solid rgba(255,255,255,0.08);
+          padding: 10px 16px;
+          background: rgba(0,0,0,0.6);
           backdrop-filter: blur(12px);
+          z-index: 100;
+          flex-shrink: 0;
         }
-        .tc-header-left { display: flex; align-items: center; gap: 14px; }
-        .tc-icon { font-size: 28px; }
-        .tc-header-left h2 { margin: 0; font-size: 1.1rem; font-weight: 700; color: #fff; }
-        .tc-header-left p { margin: 2px 0 0; font-size: 0.8rem; color: #9090c0; }
-        .tc-close-btn {
-          background: rgba(255,255,255,0.08); border: none; color: #ccc;
-          width: 36px; height: 36px; border-radius: 50%; cursor: pointer;
-          font-size: 1rem; transition: background 0.2s;
+        .tc-topbar-left {
+          display: flex; align-items: center; gap: 8px;
         }
-        .tc-close-btn:hover { background: rgba(255,100,100,0.3); }
+        .tc-topbar-count {
+          background: rgba(124,58,237,0.9);
+          color: white;
+          padding: 4px 10px;
+          border-radius: 999px;
+          font-size: 0.75rem;
+          font-weight: 700;
+        }
+        .tc-topbar-done { font-size: 0.9rem; }
+        .tc-topbar-center {
+          position: absolute; left: 50%; transform: translateX(-50%);
+          font-size: 0.8rem; font-weight: 600; color: #a0a0d0;
+          letter-spacing: 0.05em;
+        }
+        .tc-topbar-close {
+          background: rgba(255,255,255,0.1); border: none; color: #ccc;
+          width: 32px; height: 32px; border-radius: 50%;
+          cursor: pointer; font-size: 0.9rem;
+          display: flex; align-items: center; justify-content: center;
+        }
 
-        .tc-progress-bar-track { height: 3px; background: rgba(255,255,255,0.07); }
-        .tc-progress-bar-fill {
-          height: 100%;
-          background: linear-gradient(90deg, #7c3aed, #38bdf8);
-          transition: width 0.4s ease;
+        /* ===== SHOT PROGRESS DOTS ===== */
+        .tc-progress-strip {
+          padding: 8px 12px;
+          background: rgba(0,0,0,0.4);
+          backdrop-filter: blur(8px);
+          z-index: 100;
+          flex-shrink: 0;
+        }
+        .tc-progress-dots {
+          display: flex; gap: 4px;
+          overflow-x: auto;
+          scrollbar-width: none;
+          -webkit-overflow-scrolling: touch;
+        }
+        .tc-progress-dots::-webkit-scrollbar { display: none; }
+        .tc-progress-dot {
+          flex-shrink: 0;
+          width: 28px; height: 28px;
+          border-radius: 50%;
+          border: 2px solid rgba(255,255,255,0.15);
+          background: rgba(255,255,255,0.05);
+          cursor: pointer;
+          padding: 0;
+          position: relative;
+          overflow: hidden;
+          transition: all 0.2s;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 0.65rem;
+          font-weight: 600;
+          color: #606080;
+        }
+        .tc-progress-dot:disabled { cursor: default; opacity: 0.25; }
+        .tc-progress-dot.active {
+          border-color: #a78bfa;
+          box-shadow: 0 0 0 2px rgba(167,139,250,0.4), inset 0 0 8px rgba(167,139,250,0.2);
+          background: rgba(167,139,250,0.2);
+          color: #a78bfa;
+          transform: scale(1.1);
+        }
+        .tc-progress-dot.done {
+          border-color: #38bdf8;
+          background: rgba(56,189,248,0.25);
+        }
+        .tc-dot-check {
+          color: #38bdf8;
+          font-size: 0.75rem;
+          font-weight: 700;
+        }
+        .tc-dot-num {
+          font-size: 0.6rem;
+          font-weight: 600;
         }
 
-        .tc-body {
-          flex: 1; overflow: auto;
-          display: flex; gap: 24px; padding: 20px 24px;
+        /* ===== MAIN CONTENT (camera viewfinder) ===== */
+        .tc-main {
+          flex: 1;
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          min-height: 0;
         }
 
-        .tc-camera-panel {
-          flex: 1; min-width: 0;
-          display: flex; align-items: stretch;
-        }
-        .tc-camera-placeholder {
-          flex: 1; display: flex; flex-direction: column;
-          align-items: center; justify-content: center;
-          gap: 16px; text-align: center;
-          border: 2px dashed rgba(255,255,255,0.12);
-          border-radius: 16px;
-          padding: 40px;
-        }
-        .tc-placeholder-icon { font-size: 52px; }
-
+        /* ===== VIEWFINDER ===== */
         .tc-viewfinder-wrap {
-          flex: 1; position: relative;
-          border-radius: 16px; overflow: hidden;
+          flex: 1;
+          position: relative;
           background: #000;
+          overflow: hidden;
         }
         .tc-video {
           width: 100%; height: 100%;
-          object-fit: cover; display: block;
+          object-fit: cover;
+          display: block;
         }
 
+        /* Starting overlay */
+        .tc-starting-overlay {
+          position: absolute; inset: 0;
+          display: flex; flex-direction: column;
+          align-items: center; justify-content: center;
+          gap: 12px; z-index: 50;
+          background: rgba(7,7,26,0.9);
+          backdrop-filter: blur(4px);
+        }
+        .tc-starting-overlay span {
+          color: #9090c0; font-size: 0.9rem;
+        }
+        .tc-starting-debug {
+          font-size: 0.7rem; color: #a0a0d0;
+          background: rgba(0,0,0,0.5);
+          padding: 4px 10px;
+          border-radius: 6px;
+          font-family: monospace;
+          max-width: 90%; text-align: center;
+        }
+
+        /* Flash effect */
         .tc-flash {
           position: absolute; inset: 0;
-          background: white; opacity: 0.7;
-          animation: flashOut 0.25s forwards;
-          pointer-events: none; z-index: 20;
+          background: white; opacity: 0.9;
+          animation: flashOut 0.3s forwards;
+          pointer-events: none; z-index: 60;
         }
-        @keyframes flashOut { to { opacity: 0; } }
+        @keyframes flashOut { 
+          0% { opacity: 0.9; }
+          100% { opacity: 0; }
+        }
 
+        /* Captured toast */
+        .tc-captured-toast {
+          position: absolute;
+          top: 50%; left: 50%;
+          transform: translate(-50%, -50%);
+          background: rgba(56,189,248,0.95);
+          color: white;
+          padding: 12px 28px;
+          border-radius: 999px;
+          font-size: 1rem;
+          font-weight: 700;
+          z-index: 55;
+          animation: toastPop 1s ease forwards;
+          pointer-events: none;
+          box-shadow: 0 4px 20px rgba(56,189,248,0.4);
+        }
+        @keyframes toastPop {
+          0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0; }
+          20% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
+          80% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+          100% { transform: translate(-50%, -50%) scale(0.9); opacity: 0; }
+        }
+
+        /* ===== ALIGNMENT GUIDE (prominent on mobile) ===== */
+        .tc-alignment-guide {
+          position: absolute;
+          top: 12px; left: 0; right: 0;
+          display: flex; flex-direction: column;
+          align-items: center; gap: 10px;
+          z-index: 30;
+          pointer-events: none;
+          padding: 0 16px;
+        }
+        .tc-alignment-pill {
+          display: flex; align-items: center; gap: 8px;
+          background: rgba(0,0,0,0.6);
+          backdrop-filter: blur(8px);
+          padding: 6px 14px;
+          border-radius: 999px;
+          border: 1px solid rgba(255,255,255,0.1);
+        }
+        .tc-alignment-shot {
+          color: #a78bfa; font-weight: 700; font-size: 0.8rem;
+        }
+        .tc-alignment-divider {
+          width: 1px; height: 12px;
+          background: rgba(255,255,255,0.2);
+        }
+        .tc-alignment-compass {
+          color: #fff; font-weight: 700; font-size: 0.85rem;
+          letter-spacing: 0.05em;
+        }
+        .tc-alignment-instruction {
+          text-align: center;
+          background: rgba(0,0,0,0.55);
+          backdrop-filter: blur(8px);
+          padding: 8px 16px;
+          border-radius: 12px;
+          max-width: 280px;
+          border: 1px solid rgba(255,255,255,0.08);
+        }
+        .tc-alignment-label {
+          color: #fff; font-size: 0.85rem; font-weight: 600;
+          margin-bottom: 2px;
+        }
+        .tc-alignment-dir {
+          color: #a0a0d0; font-size: 0.75rem; line-height: 1.4;
+        }
+        .tc-compass-dial {
+          width: 100px; height: 100px;
+          border: 2px solid rgba(255,255,255,0.2);
+          border-radius: 50%;
+          display: flex; align-items: center; justify-content: center;
+          position: relative;
+          background: rgba(0,0,0,0.3);
+          backdrop-filter: blur(4px);
+        }
+        .tc-compass-n {
+          position: absolute; top: 6px;
+          font-size: 0.7rem; color: #ef4444;
+          font-weight: 800;
+        }
+        .tc-compass-arrow {
+          width: 48px; height: 48px;
+          transition: transform 0.4s ease;
+          filter: drop-shadow(0 0 4px rgba(167,139,250,0.5));
+        }
+        .tc-pitch-hint {
+          background: rgba(124,58,237,0.7);
+          color: white;
+          padding: 5px 14px;
+          border-radius: 999px;
+          font-size: 0.75rem; font-weight: 600;
+          backdrop-filter: blur(4px);
+        }
+
+        /* ===== CENTER CROSSHAIR ===== */
         .tc-guide-overlay {
           position: absolute; inset: 0;
           display: flex; align-items: center; justify-content: center;
-          pointer-events: none;
+          pointer-events: none; z-index: 20;
         }
         .tc-guide-crosshair {
           position: absolute;
-          width: 60px; height: 60px;
-          border: 2px solid rgba(124,58,237,0.6);
+          width: 80px; height: 80px;
+          border: 2px solid rgba(167,139,250,0.5);
           border-radius: 50%;
         }
         .tc-guide-crosshair::before, .tc-guide-crosshair::after {
-          content: ''; position: absolute; background: rgba(124,58,237,0.5);
+          content: ''; position: absolute; background: rgba(167,139,250,0.4);
         }
         .tc-guide-crosshair::before {
-          width: 1px; height: 24px; top: -28px; left: 50%; transform: translateX(-50%);
+          width: 1px; height: 32px;
+          top: -36px; left: 50%; transform: translateX(-50%);
         }
         .tc-guide-crosshair::after {
-          height: 1px; width: 24px; left: -28px; top: 50%; transform: translateY(-50%);
+          height: 1px; width: 32px;
+          left: -36px; top: 50%; transform: translateY(-50%);
         }
         .tc-guide-ring {
           position: absolute;
-          border: 1px dashed rgba(56,189,248,0.25);
+          border: 1px dashed rgba(56,189,248,0.2);
           border-radius: 50%;
         }
-        .tc-guide-ring-h { width: 70%; height: 25%; }
-        .tc-guide-ring-v { width: 25%; height: 70%; }
+        .tc-guide-ring-h { width: 75%; height: 30%; }
+        .tc-guide-ring-v { width: 30%; height: 75%; }
 
-        .tc-capture-btn {
-          position: absolute; bottom: 24px; left: 50%;
-          transform: translateX(-50%);
-          width: 72px; height: 72px;
-          background: rgba(255,255,255,0.12);
-          border: 3px solid white;
-          border-radius: 50%; cursor: pointer;
-          display: flex; align-items: center; justify-content: center;
-          transition: transform 0.1s, background 0.2s;
-          z-index: 10;
-        }
-        .tc-capture-btn:hover { background: rgba(255,255,255,0.25); }
-        .tc-capture-btn:active { transform: translateX(-50%) scale(0.92); }
-        .tc-capture-inner {
-          width: 54px; height: 54px;
-          background: white; border-radius: 50%;
-          transition: transform 0.1s;
-        }
-        .tc-capture-btn:active .tc-capture-inner { transform: scale(0.88); }
-
+        /* Stop button (top-right of viewfinder) */
         .tc-stop-btn {
           position: absolute; top: 12px; right: 12px;
-          background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2);
-          color: #ccc; padding: 4px 12px; border-radius: 8px;
-          cursor: pointer; font-size: 0.75rem;
-          transition: background 0.2s; z-index: 15;
+          background: rgba(0,0,0,0.5);
+          border: 1px solid rgba(255,255,255,0.2);
+          color: #ccc;
+          width: 36px; height: 36px;
+          border-radius: 50%;
+          cursor: pointer;
+          font-size: 0.85rem;
+          z-index: 40;
+          display: flex; align-items: center; justify-content: center;
+          backdrop-filter: blur(4px);
         }
-        .tc-stop-btn:hover { background: rgba(220,50,50,0.4); }
 
-        .tc-grid-panel {
-          width: 340px; flex-shrink: 0;
-          display: flex; flex-direction: column; gap: 12px;
-          overflow-y: auto;
+        /* ===== PLACEHOLDER / START SCREEN ===== */
+        .tc-camera-placeholder {
+          flex: 1;
+          display: flex; flex-direction: column;
+          align-items: center; justify-content: center;
+          gap: 20px;
+          text-align: center;
+          padding: 24px;
+          background: linear-gradient(180deg, #0a0a1a 0%, #07071a 100%);
         }
-        .tc-grid-title {
-          margin: 0; font-size: 0.85rem;
-          text-transform: uppercase; letter-spacing: 0.1em;
+        .tc-placeholder-icon { font-size: 56px; }
+        .tc-placeholder-title {
+          margin: 0;
+          font-size: 1.1rem; font-weight: 700; color: #fff;
+        }
+        .tc-placeholder-text {
+          margin: 0;
+          font-size: 0.85rem; color: #9090c0;
+          line-height: 1.6; max-width: 280px;
+        }
+        .tc-debug-msg {
+          font-size: 0.7rem; color: #7070a0;
+          background: rgba(0,0,0,0.3);
+          padding: 4px 10px;
+          border-radius: 6px;
+          font-family: monospace;
+          max-width: 100%;
+        }
+
+        /* ===== MAP TOGGLE (mobile) ===== */
+        .tc-map-toggle {
+          position: absolute;
+          bottom: 100px; left: 50%; transform: translateX(-50%);
+          z-index: 40;
+          background: rgba(0,0,0,0.6);
+          backdrop-filter: blur(8px);
+          border: 1px solid rgba(255,255,255,0.1);
+          color: #a0a0d0;
+          padding: 6px 14px;
+          border-radius: 999px;
+          font-size: 0.75rem;
+          cursor: pointer;
+        }
+
+        /* ===== SHOT MAP PANEL (collapsible) ===== */
+        .tc-map-panel {
+          position: absolute;
+          bottom: 0; left: 0; right: 0;
+          max-height: 60vh;
+          background: rgba(7,7,26,0.95);
+          backdrop-filter: blur(16px);
+          border-top: 1px solid rgba(255,255,255,0.08);
+          z-index: 90;
+          transform: translateY(100%);
+          transition: transform 0.3s ease;
+          overflow-y: auto;
+          padding: 16px;
+          display: flex; flex-direction: column; gap: 12px;
+        }
+        .tc-map-panel.open { transform: translateY(0); }
+        .tc-map-header {
+          display: flex; align-items: center; justify-content: space-between;
+        }
+        .tc-map-header h3 {
+          margin: 0;
+          font-size: 0.85rem;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
           color: #9090c0;
+        }
+        .tc-map-close {
+          background: rgba(255,255,255,0.08); border: none;
+          color: #ccc; width: 28px; height: 28px;
+          border-radius: 50%; cursor: pointer;
+          font-size: 0.8rem;
         }
         .tc-grid-row {
           display: flex; flex-direction: column; gap: 6px;
@@ -849,53 +1156,108 @@ export default function TourCapture({ onTourReady, onClose }) {
           cursor: pointer; display: flex;
           align-items: center; justify-content: center;
           font-size: 0.65rem; color: #6666aa;
-          transition: border-color 0.2s, box-shadow 0.2s, opacity 0.2s;
+          transition: all 0.2s;
           padding: 0;
         }
-        .tc-shot-cell:hover:not(:disabled) { border-color: rgba(124,58,237,0.5); }
+        .tc-shot-cell:active:not(:disabled) { transform: scale(0.95); }
         .tc-shot-cell.active {
-          border-color: #7c3aed;
-          box-shadow: 0 0 0 2px rgba(124,58,237,0.4);
+          border-color: #a78bfa;
+          box-shadow: 0 0 0 2px rgba(167,139,250,0.4);
         }
-        .tc-shot-cell.done { border-color: rgba(56,189,248,0.5); }
-        .tc-shot-cell:disabled { cursor: not-allowed; }
-        .tc-shot-thumb {
-          width: 100%; height: 100%; object-fit: cover; display: block;
+        .tc-shot-cell.done {
+          border-color: #38bdf8;
+          background: rgba(56,189,248,0.15);
         }
+        .tc-shot-cell:disabled { cursor: not-allowed; opacity: 0.3; }
         .tc-shot-num { font-size: 0.6rem; font-weight: 700; color: #7070a0; }
-        .tc-retake-btn {
-          position: absolute; top: 1px; right: 1px;
-          width: 16px; height: 16px;
-          background: rgba(0,0,0,0.7); border: none;
-          color: #ccc; font-size: 0.55rem;
-          border-radius: 3px; cursor: pointer;
-          display: flex; align-items: center; justify-content: center;
-          padding: 0; z-index: 2;
+        .tc-shot-check {
+          color: #38bdf8;
+          font-size: 0.9rem;
+          font-weight: 700;
         }
 
-        .tc-footer {
-          padding: 14px 24px;
-          background: rgba(255,255,255,0.03);
-          border-top: 1px solid rgba(255,255,255,0.07);
-          display: flex; flex-direction: column; gap: 10px;
+        /* ===== BOTTOM BAR ===== */
+        .tc-bottombar {
+          flex-shrink: 0;
+          padding: 12px 16px;
+          background: rgba(0,0,0,0.7);
+          backdrop-filter: blur(12px);
+          border-top: 1px solid rgba(255,255,255,0.06);
+          z-index: 100;
+          min-height: 72px;
+          display: flex; align-items: center;
+          justify-content: center;
         }
+
+        /* Big capture button */
+        .tc-capture-bar {
+          display: flex; flex-direction: column;
+          align-items: center; gap: 6px;
+        }
+        .tc-capture-btn-large {
+          background: none; border: none;
+          cursor: pointer;
+          display: flex; flex-direction: column;
+          align-items: center; gap: 6px;
+          padding: 0;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .tc-capture-ring {
+          width: 84px; height: 84px;
+          border: 4px solid rgba(255,255,255,0.3);
+          border-radius: 50%;
+          display: flex; align-items: center; justify-content: center;
+          transition: all 0.2s;
+        }
+        .tc-capture-btn-large:active .tc-capture-ring {
+          transform: scale(0.92);
+        }
+        .tc-capture-ring.complete {
+          border-color: #22c55e;
+          background: rgba(34,197,94,0.1);
+        }
+        .tc-capture-inner {
+          width: 64px; height: 64px;
+          background: white;
+          border-radius: 50%;
+          transition: all 0.2s;
+        }
+        .tc-capture-btn-large:active .tc-capture-inner {
+          transform: scale(0.9);
+        }
+        .tc-capture-inner.complete {
+          background: #22c55e;
+        }
+        .tc-capture-label {
+          color: #9090c0; font-size: 0.75rem;
+          font-weight: 500;
+        }
+
+        /* Footer buttons */
         .tc-footer-actions {
-          display: flex; justify-content: flex-end; gap: 12px; align-items: center;
+          display: flex; justify-content: space-between;
+          gap: 12px; align-items: center;
+          width: 100%;
         }
         .tc-error-banner {
-          background: rgba(220,50,50,0.15); border: 1px solid rgba(220,50,50,0.3);
-          color: #ff8888; padding: 8px 16px; border-radius: 8px;
-          font-size: 0.82rem;
+          background: rgba(220,50,50,0.15);
+          border: 1px solid rgba(220,50,50,0.3);
+          color: #ff8888;
+          padding: 8px 14px; border-radius: 8px;
+          font-size: 0.8rem;
+          width: 100%; text-align: center;
         }
 
+        /* ===== BUTTONS ===== */
         .tc-btn-primary {
           background: linear-gradient(135deg, #7c3aed, #5b21b6);
-          color: white; border: none; padding: 10px 22px;
-          border-radius: 10px; cursor: pointer;
-          font-size: 0.88rem; font-weight: 600;
+          color: white; border: none;
+          padding: 14px 28px;
+          border-radius: 12px; cursor: pointer;
+          font-size: 0.95rem; font-weight: 600;
           transition: opacity 0.2s, box-shadow 0.2s, transform 0.1s;
+          -webkit-tap-highlight-color: transparent;
         }
-        .tc-btn-primary:hover:not(:disabled) { opacity: 0.9; }
         .tc-btn-primary:active:not(:disabled) { transform: scale(0.97); }
         .tc-btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
         .tc-btn-primary.glow {
@@ -906,23 +1268,37 @@ export default function TourCapture({ onTourReady, onClose }) {
           0%, 100% { box-shadow: 0 0 20px rgba(124,58,237,0.5); }
           50%       { box-shadow: 0 0 36px rgba(56,189,248,0.7); }
         }
-        .tc-stitch-btn { padding: 12px 28px; font-size: 0.95rem; }
-
+        .tc-btn-large {
+          padding: 16px 36px;
+          font-size: 1rem;
+          width: 100%; max-width: 280px;
+        }
+        .tc-stitch-btn {
+          padding: 14px 24px;
+          font-size: 0.9rem;
+          white-space: nowrap;
+        }
         .tc-btn-ghost {
           background: transparent;
           border: 1px solid rgba(255,255,255,0.15);
-          color: #9090c0; padding: 10px 18px;
-          border-radius: 10px; cursor: pointer;
-          font-size: 0.88rem; transition: border-color 0.2s, color 0.2s;
+          color: #9090c0;
+          padding: 14px 22px;
+          border-radius: 12px; cursor: pointer;
+          font-size: 0.9rem;
+          transition: border-color 0.2s, color 0.2s;
+          -webkit-tap-highlight-color: transparent;
         }
-        .tc-btn-ghost:hover { border-color: rgba(255,255,255,0.3); color: #ccc; }
+        .tc-btn-ghost:active { border-color: rgba(255,255,255,0.3); color: #ccc; }
 
+        /* Stitching state */
         .tc-stitching-state {
           display: flex; align-items: center; justify-content: center;
-          gap: 14px; color: #9090c0; font-size: 0.88rem;
+          gap: 12px; color: #9090c0; font-size: 0.85rem;
         }
+
+        /* Spinner */
         .tc-spinner {
-          width: 22px; height: 22px;
+          width: 24px; height: 24px;
           border: 3px solid rgba(124,58,237,0.3);
           border-top-color: #7c3aed;
           border-radius: 50%;
@@ -930,14 +1306,39 @@ export default function TourCapture({ onTourReady, onClose }) {
         }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        .tc-grid-panel::-webkit-scrollbar { width: 4px; }
-        .tc-grid-panel::-webkit-scrollbar-track { background: transparent; }
-        .tc-grid-panel::-webkit-scrollbar-thumb { background: rgba(124,58,237,0.4); border-radius: 2px; }
+        /* Scrollbar for map */
+        .tc-map-panel::-webkit-scrollbar { width: 4px; }
+        .tc-map-panel::-webkit-scrollbar-track { background: transparent; }
+        .tc-map-panel::-webkit-scrollbar-thumb { background: rgba(124,58,237,0.4); border-radius: 2px; }
 
-        @media (max-width: 768px) {
-          .tc-body { flex-direction: column; }
-          .tc-grid-panel { width: 100%; }
-          .tc-row-shots { grid-template-columns: repeat(6, 1fr); }
+        /* ===== DESKTOP OVERRIDES ===== */
+        @media (min-width: 769px) {
+          .tc-main {
+            flex-direction: row;
+            gap: 0;
+          }
+          .tc-viewfinder-wrap {
+            flex: 1;
+            border-radius: 0;
+          }
+          .tc-map-panel {
+            position: static;
+            transform: none;
+            max-height: none;
+            width: 360px;
+            flex-shrink: 0;
+            border-top: none;
+            border-left: 1px solid rgba(255,255,255,0.06);
+          }
+          .tc-map-toggle { display: none; }
+          .tc-map-header { display: none; }
+          .tc-topbar-center { font-size: 0.85rem; }
+          .tc-alignment-guide { top: 16px; }
+          .tc-compass-dial { width: 120px; height: 120px; }
+          .tc-compass-arrow { width: 56px; height: 56px; }
+          .tc-capture-ring { width: 72px; height: 72px; }
+          .tc-capture-inner { width: 52px; height: 52px; }
+          .tc-bottombar { padding: 14px 24px; }
         }
       `}</style>
     </div>

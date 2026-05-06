@@ -25,30 +25,45 @@ export function getVertexClient() {
   if (saKey) {
     try {
       const credentials = JSON.parse(saKey);
+      if (!credentials.private_key || !credentials.client_email) {
+        throw new Error('Service account key missing required fields (private_key, client_email)');
+      }
       config.googleAuthOptions = { credentials };
+      console.log('[VertexAI] Using service account from GCP_SERVICE_ACCOUNT_KEY');
     } catch (e) {
-      console.error('Failed to parse GCP_SERVICE_ACCOUNT_KEY:', e);
+      console.error('[VertexAI] Failed to parse GCP_SERVICE_ACCOUNT_KEY:', e.message);
+      throw new Error(`Invalid GCP_SERVICE_ACCOUNT_KEY: ${e.message}. Please ensure the key is a valid JSON string with proper escaping.`);
     }
   } else {
     // Fallback to the traditional file path method
     const credPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    if (!credPath) {
+      throw new Error('No Google Cloud credentials found. Please set either GCP_SERVICE_ACCOUNT_KEY (JSON string) or GOOGLE_APPLICATION_CREDENTIALS (file path).');
+    }
     if (credPath && !path.isAbsolute(credPath)) {
       process.env.GOOGLE_APPLICATION_CREDENTIALS = path.resolve(process.cwd(), credPath);
     }
+    console.log('[VertexAI] Using service account from GOOGLE_APPLICATION_CREDENTIALS file');
   }
 
-  vertexClient = new VertexAI(config);
-  return vertexClient;
+  try {
+    vertexClient = new VertexAI(config);
+    console.log('[VertexAI] Client initialized successfully');
+    return vertexClient;
+  } catch (e) {
+    console.error('[VertexAI] Failed to initialize client:', e);
+    throw new Error(`VertexAI initialization failed: ${e.message}. Check your GCP credentials.`);
+  }
 }
 
 /**
  * Returns the generative model configured for image stitching.
- * Uses the latest Gemini 3.1 Flash Image model for multi-image fusion.
+ * Uses Gemini 2.5 Flash model which supports image inputs for multi-image fusion.
  */
 export function getStitchingModel() {
   const vertex = getVertexClient();
   return vertex.getGenerativeModel({
-    model: 'gemini-3.1-flash-image',
+    model: 'gemini-2.5-flash',
     generationConfig: {
       maxOutputTokens: 8192,
       temperature: 0.1,
