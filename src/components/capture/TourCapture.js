@@ -3,65 +3,113 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 
 // ─── Shot definition ──────────────────────────────────────────────────────────
-// 24 shots arranged in 4 rows × 6 columns covering the full sphere,
-// plus nadir (floor) and zenith (ceiling) shots.
+// 24 shots covering the full sphere in 4 rows × 6 columns
 const SHOTS = [
-  // Row 0 — pitch +60° (upper)
-  { id: 0,  row: 0, col: 0, pitch:  60, yaw:   0, label: 'Upper N'  },
-  { id: 1,  row: 0, col: 1, pitch:  60, yaw:  60, label: 'Upper NE' },
-  { id: 2,  row: 0, col: 2, pitch:  60, yaw: 120, label: 'Upper E'  },
-  { id: 3,  row: 0, col: 3, pitch:  60, yaw: 180, label: 'Upper S'  },
-  { id: 4,  row: 0, col: 4, pitch:  60, yaw: 240, label: 'Upper SW' },
-  { id: 5,  row: 0, col: 5, pitch:  60, yaw: 300, label: 'Upper NW' },
-  // Row 1 — pitch +20° (mid-upper)
-  { id: 6,  row: 1, col: 0, pitch:  20, yaw:   0, label: 'Mid-Up N'  },
-  { id: 7,  row: 1, col: 1, pitch:  20, yaw:  60, label: 'Mid-Up NE' },
-  { id: 8,  row: 1, col: 2, pitch:  20, yaw: 120, label: 'Mid-Up E'  },
-  { id: 9,  row: 1, col: 3, pitch:  20, yaw: 180, label: 'Mid-Up S'  },
-  { id: 10, row: 1, col: 4, pitch:  20, yaw: 240, label: 'Mid-Up SW' },
-  { id: 11, row: 1, col: 5, pitch:  20, yaw: 300, label: 'Mid-Up NW' },
-  // Row 2 — pitch -20° (mid-lower)
-  { id: 12, row: 2, col: 0, pitch: -20, yaw:   0, label: 'Mid-Dn N'  },
-  { id: 13, row: 2, col: 1, pitch: -20, yaw:  60, label: 'Mid-Dn NE' },
-  { id: 14, row: 2, col: 2, pitch: -20, yaw: 120, label: 'Mid-Dn E'  },
-  { id: 15, row: 2, col: 3, pitch: -20, yaw: 180, label: 'Mid-Dn S'  },
-  { id: 16, row: 2, col: 4, pitch: -20, yaw: 240, label: 'Mid-Dn SW' },
-  { id: 17, row: 2, col: 5, pitch: -20, yaw: 300, label: 'Mid-Dn NW' },
-  // Row 3 — pitch -60° (lower)
-  { id: 18, row: 3, col: 0, pitch: -60, yaw:   0, label: 'Lower N'  },
-  { id: 19, row: 3, col: 1, pitch: -60, yaw:  60, label: 'Lower NE' },
-  { id: 20, row: 3, col: 2, pitch: -60, yaw: 120, label: 'Lower E'  },
-  { id: 21, row: 3, col: 3, pitch: -60, yaw: 180, label: 'Lower S'  },
-  { id: 22, row: 3, col: 4, pitch: -60, yaw: 240, label: 'Lower SW' },
-  { id: 23, row: 3, col: 5, pitch: -60, yaw: 300, label: 'Lower NW' },
+  // Row 0 — pitch +60° (upper ring)
+  { id: 0,  row: 0, pitch:  60, yaw:   0, label: 'Upper North',     dir: 'Point straight up, face North' },
+  { id: 1,  row: 0, pitch:  60, yaw:  60, label: 'Upper North-East', dir: 'Point straight up, face North-East' },
+  { id: 2,  row: 0, pitch:  60, yaw: 120, label: 'Upper East',      dir: 'Point straight up, face East' },
+  { id: 3,  row: 0, pitch:  60, yaw: 180, label: 'Upper South',     dir: 'Point straight up, face South' },
+  { id: 4,  row: 0, pitch:  60, yaw: 240, label: 'Upper South-West', dir: 'Point straight up, face South-West' },
+  { id: 5,  row: 0, pitch:  60, yaw: 300, label: 'Upper North-West', dir: 'Point straight up, face North-West' },
+  // Row 1 — pitch +20° (mid-upper ring)
+  { id: 6,  row: 1, pitch:  20, yaw:   0, label: 'Mid-Up North',     dir: 'Tilt up slightly, face North' },
+  { id: 7,  row: 1, pitch:  20, yaw:  60, label: 'Mid-Up North-East', dir: 'Tilt up slightly, face North-East' },
+  { id: 8,  row: 1, pitch:  20, yaw: 120, label: 'Mid-Up East',      dir: 'Tilt up slightly, face East' },
+  { id: 9,  row: 1, pitch:  20, yaw: 180, label: 'Mid-Up South',     dir: 'Tilt up slightly, face South' },
+  { id: 10, row: 1, pitch:  20, yaw: 240, label: 'Mid-Up South-West', dir: 'Tilt up slightly, face South-West' },
+  { id: 11, row: 1, pitch:  20, yaw: 300, label: 'Mid-Up North-West', dir: 'Tilt up slightly, face North-West' },
+  // Row 2 — pitch -20° (mid-lower ring)
+  { id: 12, row: 2, pitch: -20, yaw:   0, label: 'Mid-Dn North',     dir: 'Tilt down slightly, face North' },
+  { id: 13, row: 2, pitch: -20, yaw:  60, label: 'Mid-Dn North-East', dir: 'Tilt down slightly, face North-East' },
+  { id: 14, row: 2, pitch: -20, yaw: 120, label: 'Mid-Dn East',      dir: 'Tilt down slightly, face East' },
+  { id: 15, row: 2, pitch: -20, yaw: 180, label: 'Mid-Dn South',     dir: 'Tilt down slightly, face South' },
+  { id: 16, row: 2, pitch: -20, yaw: 240, label: 'Mid-Dn South-West', dir: 'Tilt down slightly, face South-West' },
+  { id: 17, row: 2, pitch: -20, yaw: 300, label: 'Mid-Dn North-West', dir: 'Tilt down slightly, face North-West' },
+  // Row 3 — pitch -60° (lower ring)
+  { id: 18, row: 3, pitch: -60, yaw:   0, label: 'Lower North',     dir: 'Point straight down, face North' },
+  { id: 19, row: 3, pitch: -60, yaw:  60, label: 'Lower North-East', dir: 'Point straight down, face North-East' },
+  { id: 20, row: 3, pitch: -60, yaw: 120, label: 'Lower East',      dir: 'Point straight down, face East' },
+  { id: 21, row: 3, pitch: -60, yaw: 180, label: 'Lower South',     dir: 'Point straight down, face South' },
+  { id: 22, row: 3, pitch: -60, yaw: 240, label: 'Lower South-West', dir: 'Point straight down, face South-West' },
+  { id: 23, row: 3, pitch: -60, yaw: 300, label: 'Lower North-West', dir: 'Point straight down, face North-West' },
 ];
 
-const TOTAL = SHOTS.length; // 24
+const TOTAL = SHOTS.length;
+
+// ─── Helper: yaw → compass direction text ───────────────────────────────────
+function yawToCompass(yaw) {
+  const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  const idx = Math.round(((yaw % 360 + 360) % 360) / 45) % 8;
+  return dirs[idx];
+}
+
+// ─── Helper: pitch → tilt text ────────────────────────────────────────────────
+function pitchToTilt(pitch) {
+  if (pitch >= 50) return 'Point camera straight UP at the ceiling / sky';
+  if (pitch >= 10) return 'Tilt UP about 20°';
+  if (pitch <= -50) return 'Point camera straight DOWN at the floor / ground';
+  if (pitch <= -10) return 'Tilt DOWN about 20°';
+  return 'Hold camera LEVEL (eye height)';
+}
 
 export default function TourCapture({ onTourReady, onClose }) {
-  // Captured images: { [shotId]: base64String }
-  const [captured, setCaptured]         = useState({});
-  const [activeShot, setActiveShot]     = useState(0);
-  const [cameraOn, setCameraOn]         = useState(false);
-  const [cameraError, setCameraError]   = useState(null);
-  const [isStitching, setIsStitching]   = useState(false);
-  const [stitchError, setStitchError]   = useState(null);
+  const [captured, setCaptured]       = useState({});
+  const [activeShot, setActiveShot]   = useState(0);
+  const [cameraState, setCameraState] = useState('idle'); // 'idle' | 'starting' | 'live' | 'error'
+  const [cameraError, setCameraError] = useState(null);
+  const [isStitching, setIsStitching] = useState(false);
+  const [stitchError, setStitchError] = useState(null);
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
-  const [flashActive, setFlashActive]   = useState(false);
+  const [flashActive, setFlashActive] = useState(false);
+  const [debugMsg, setDebugMsg]       = useState('');
 
   const videoRef  = useRef(null);
   const streamRef = useRef(null);
+  const pendingStreamRef = useRef(null); // stream obtained before video element mounts
 
   const captureCount = Object.keys(captured).length;
   const currentShot  = SHOTS[activeShot];
   const allDone      = captureCount === TOTAL;
 
-  // ── Camera helpers ──────────────────────────────────────────────────────────
+  // ── Connect pending stream to video element when it mounts ────────────────
+  useEffect(() => {
+    if (pendingStreamRef.current && videoRef.current && cameraState === 'starting') {
+      const connect = async () => {
+        try {
+          videoRef.current.srcObject = pendingStreamRef.current;
+          streamRef.current = pendingStreamRef.current;
+          pendingStreamRef.current = null;
+
+          try { await videoRef.current.play(); } catch (e) { console.warn('play() warning:', e); }
+
+          if (videoRef.current.readyState < 2) {
+            await new Promise((res, rej) => {
+              const t = setTimeout(() => rej(new Error('video metadata timeout')), 3000);
+              const onMeta = () => { clearTimeout(t); videoRef.current?.removeEventListener('loadedmetadata', onMeta); res(); };
+              videoRef.current.addEventListener('loadedmetadata', onMeta, { once: true });
+            });
+          }
+          setCameraState('live');
+          setDebugMsg('Camera connected ✅');
+        } catch (err) {
+          console.error('Failed to connect stream to video:', err);
+          setCameraError('Failed to start video feed. Please reload and try again.');
+          setCameraState('error');
+        }
+      };
+      connect();
+    }
+  }, [cameraState]);
+
+  // ── Start camera ────────────────────────────────────────────────────────────
   const startCamera = useCallback(async () => {
-    // Prevent double-start
-    if (streamRef.current) return;
+    if (streamRef.current || pendingStreamRef.current) return;
+    setCameraError(null);
+    setDebugMsg('Requesting camera permission...');
+    setCameraState('starting');
+
     try {
-      setCameraError(null);
       const constraints = {
         video: {
           facingMode: 'environment',
@@ -70,7 +118,6 @@ export default function TourCapture({ onTourReady, onClose }) {
         },
       };
 
-      // On desktop or devices without back camera, fallback to any camera
       let stream;
       try {
         stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -81,64 +128,51 @@ export default function TourCapture({ onTourReady, onClose }) {
         });
       }
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        streamRef.current = stream;
+      pendingStreamRef.current = stream;
+      setDebugMsg('Stream obtained. Connecting to video element...');
 
-        // Explicitly play the video — required on some browsers (iOS Safari)
-        try {
-          await videoRef.current.play();
-        } catch (playErr) {
-          console.warn('Auto-play failed, waiting for user interaction:', playErr);
-        }
-
-        // Wait for video metadata so dimensions are available
-        if (videoRef.current.readyState < 2) {
-          await new Promise((resolve, reject) => {
-            const onLoaded = () => { videoRef.current.removeEventListener('loadedmetadata', onLoaded); resolve(); };
-            const onError = () => { videoRef.current.removeEventListener('error', onError); reject(new Error('Video failed to load')); };
-            videoRef.current.addEventListener('loadedmetadata', onLoaded, { once: true });
-            videoRef.current.addEventListener('error', onError, { once: true });
-          });
-        }
-
-        setCameraOn(true);
-      }
+      // The useEffect above will detect cameraState==='starting' + pendingStream and connect
     } catch (err) {
-      console.error('Camera error:', err);
-      setCameraError(
-        err.name === 'NotAllowedError'
-          ? 'Camera permission denied. Please allow camera access in your browser settings and reload the page.'
-          : err.name === 'NotFoundError'
-          ? 'No camera found on this device.'
-          : 'Cannot access camera. Check browser permissions and try again.'
-      );
+      console.error('Camera access error:', err);
+      let msg = 'Cannot access camera.';
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        msg = 'Camera permission denied. Please allow camera access in your browser settings and reload the page.';
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        msg = 'No camera found on this device.';
+      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+        msg = 'Camera is already in use by another app. Please close other apps using the camera.';
+      }
+      setCameraError(msg);
+      setCameraState('error');
+      setDebugMsg(`Error: ${err.name}`);
     }
   }, []);
 
+  // ── Stop camera ───────────────────────────────────────────────────────────
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach(t => t.stop());
     streamRef.current = null;
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-    setCameraOn(false);
+    pendingStreamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+    setCameraState('idle');
+    setDebugMsg('Camera stopped');
   }, []);
 
-  useEffect(() => () => stopCamera(), [stopCamera]);
+  // Cleanup on unmount
+  useEffect(() => () => {
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    pendingStreamRef.current?.getTracks().forEach(t => t.stop());
+  }, []);
 
-  // ── Capture a single frame ──────────────────────────────────────────────────
+  // ── Capture the current shot ──────────────────────────────────────────────
   const captureFrame = useCallback(() => {
     const video = videoRef.current;
-    if (!video || !video.videoWidth || !video.videoHeight) {
-      console.error('Video element not ready or has no dimensions');
-      setCameraError('Camera not ready. Please wait a moment and try again.');
+    if (!video || !video.videoWidth) {
+      setCameraError('Video not ready. Please wait a moment.');
       return;
     }
 
     const canvas = document.createElement('canvas');
-
-    // Resize for faster processing and upload
     const MAX_W = 1280;
     const scale = Math.min(1, MAX_W / video.videoWidth);
     canvas.width  = Math.round(video.videoWidth * scale);
@@ -151,71 +185,129 @@ export default function TourCapture({ onTourReady, onClose }) {
 
     const base64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
 
-    // Flash animation
     setFlashActive(true);
     setTimeout(() => setFlashActive(false), 200);
 
-    // Use functional update for both captured state AND next shot selection
     setCaptured(prev => {
-      const nextCaptured = { ...prev, [currentShot.id]: base64 };
-
-      // Find next uncaptured shot using the freshly updated state
-      const next = SHOTS.find(s => !nextCaptured[s.id]);
-      if (next) {
-        setActiveShot(next.id);
-      }
-
-      return nextCaptured;
+      const next = { ...prev, [activeShot]: base64 };
+      // Auto-advance to next uncaptured shot
+      const nextShot = SHOTS.find(s => !(s.id in next));
+      if (nextShot) setActiveShot(nextShot.id);
+      return next;
     });
-  }, [currentShot]);
+  }, [activeShot]);
 
-  // ── Retake a shot ───────────────────────────────────────────────────────────
+  // ── Retake a specific shot ────────────────────────────────────────────────
   const retakeShot = useCallback((shotId) => {
     setCaptured(prev => {
-      const updated = { ...prev };
-      delete updated[shotId];
-      return updated;
+      const next = { ...prev };
+      delete next[shotId];
+      return next;
     });
     setActiveShot(shotId);
-    // Defer camera start so the video element renders first
-    if (!cameraOn) {
-      requestAnimationFrame(() => startCamera());
-    }
-  }, [cameraOn, startCamera]);
+    if (cameraState !== 'live') startCamera();
+  }, [cameraState, startCamera]);
 
-  // ── Stitch via API ──────────────────────────────────────────────────────────
+  // ── Upload to Cloudinary (client-side) ────────────────────────────────────
+  const uploadToCloudinary = async (base64String, cloudName, uploadPreset) => {
+    const blob = await fetch(`data:image/jpeg;base64,${base64String}`).then(r => r.blob());
+    const formData = new FormData();
+    formData.append('file', blob, `shot-${Date.now()}.jpg`);
+    formData.append('upload_preset', uploadPreset);
+    formData.append('folder', 'xrplot/tours');
+    formData.append('quality', 'auto:good');
+
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error?.message || 'Cloudinary upload failed');
+    }
+
+    const data = await res.json();
+    return data.secure_url;
+  };
+
+  // ── Stitch all 24 shots ───────────────────────────────────────────────────
   const handleStitch = useCallback(async () => {
+    if (captureCount < TOTAL) {
+      setStitchError(`Please capture all ${TOTAL} shots before stitching. You have ${captureCount}/${TOTAL}.`);
+      return;
+    }
+
     setIsStitching(true);
     setStitchError(null);
     setUploadProgress({ current: 0, total: TOTAL });
     stopCamera();
 
     try {
-      const imageUrls = [];
-      const orderedShotIds = SHOTS.map(s => s.id);
+      // 1. Get Cloudinary config for client-side upload
+      setDebugMsg('Fetching Cloudinary config...');
+      const configRes = await fetch('/api/cloudinary-config');
+      if (!configRes.ok) throw new Error('Failed to get upload configuration');
+      const { cloudName, uploadPreset } = await configRes.json();
 
-      // 1. Batch upload to Cloudinary (sequentially to avoid overwhelming connection)
-      for (let i = 0; i < orderedShotIds.length; i++) {
-        const shotId = orderedShotIds[i];
-        const base64 = captured[shotId];
+      if (!cloudName || !uploadPreset) {
+        // Fallback to server-side upload if unsigned preset not configured
+        setDebugMsg('Using server upload (unsigned preset not configured)...');
         
+        // Use existing server upload endpoint
+        const imageUrls = [];
+        for (let i = 0; i < SHOTS.length; i++) {
+          const shot = SHOTS[i];
+          const base64 = captured[shot.id];
+          if (!base64) continue;
+
+          setUploadProgress({ current: i + 1, total: TOTAL });
+          setDebugMsg(`Uploading shot ${i + 1}/${TOTAL} to server...`);
+
+          const res = await fetch('/api/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: base64 }),
+          });
+
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || `Upload failed for shot ${i+1}`);
+          imageUrls.push(data.url);
+        }
+
+        setDebugMsg('Fusing images with AI...');
+        const stitchRes = await fetch('/api/stitch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageUrls }),
+        });
+
+        const stitchData = await stitchRes.json();
+        if (!stitchRes.ok || !stitchData.panoramaUrl) {
+          throw new Error(stitchData.error || 'Stitching failed — no panorama returned.');
+        }
+
+        setDebugMsg('Tour ready! ✅');
+        onTourReady?.(stitchData.panoramaUrl);
+        return;
+      }
+
+      // 2. Upload all 24 shots directly to Cloudinary (bypasses Vercel 4.5MB limit)
+      const imageUrls = [];
+      for (let i = 0; i < SHOTS.length; i++) {
+        const shot = SHOTS[i];
+        const base64 = captured[shot.id];
         if (!base64) continue;
 
         setUploadProgress({ current: i + 1, total: TOTAL });
+        setDebugMsg(`Uploading shot ${i + 1}/${TOTAL} to Cloudinary...`);
 
-        const uploadRes = await fetch('/api/upload', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: base64 }),
-        });
-
-        const uploadData = await uploadRes.json();
-        if (!uploadRes.ok) throw new Error(uploadData.error || `Upload failed for shot ${i+1}`);
-        
-        imageUrls.push(uploadData.url);
+        const url = await uploadToCloudinary(base64, cloudName, uploadPreset);
+        imageUrls.push(url);
       }
 
-      // 2. Trigger Fusion API with Cloudinary URLs
+      // 3. Send URLs to stitching API (small JSON, well under Vercel limit)
+      setDebugMsg('Fusing images with AI...');
       const res = await fetch('/api/stitch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -223,23 +315,74 @@ export default function TourCapture({ onTourReady, onClose }) {
       });
 
       const data = await res.json();
-
       if (!res.ok || !data.panoramaUrl) {
-        throw new Error(data.error || 'Stitching failed — no panorama URL returned.');
+        throw new Error(data.error || 'Stitching failed — no panorama returned.');
       }
 
+      setDebugMsg('Tour ready! ✅');
       onTourReady?.(data.panoramaUrl);
     } catch (err) {
       console.error('[TourCapture] Stitch error:', err);
       setStitchError(err.message);
+      setDebugMsg(`Error: ${err.message}`);
     } finally {
       setIsStitching(false);
       setUploadProgress({ current: 0, total: 0 });
     }
-  }, [captured, onTourReady, stopCamera]);
+  }, [captured, captureCount, onTourReady, stopCamera]);
 
-  // ── Grid row labels ─────────────────────────────────────────────────────────
-  const rowLabels = ['Upper (+60°)', 'Mid-Upper (+20°)', 'Mid-Lower (−20°)', 'Lower (−60°)'];
+  // ── Alignment arrow component ─────────────────────────────────────────────
+  function AlignmentArrow({ yaw, pitch }) {
+    const rotation = -yaw; // counter-rotate so arrow points in yaw direction
+    const pitchText = pitchToTilt(pitch);
+    const compass = yawToCompass(yaw);
+
+    return (
+      <div style={{
+        position: 'absolute', top: '16px', left: '50%', transform: 'translateX(-50%)',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px',
+        zIndex: 15, pointerEvents: 'none',
+      }}>
+        <div style={{
+          background: 'rgba(124,58,237,0.9)', color: 'white',
+          padding: '6px 16px', borderRadius: '999px',
+          fontSize: '0.8rem', fontWeight: 700,
+          backdropFilter: 'blur(8px)',
+          display: 'flex', alignItems: 'center', gap: '8px',
+        }}>
+          <span>Shot {activeShot + 1}/{TOTAL}</span>
+          <span style={{ opacity: 0.6 }}>|</span>
+          <span>{compass}</span>
+        </div>
+
+        <div style={{
+          background: 'rgba(0,0,0,0.7)', color: '#ccc',
+          padding: '4px 12px', borderRadius: '8px',
+          fontSize: '0.75rem', maxWidth: '280px', textAlign: 'center',
+        }}>
+          {pitchText}
+        </div>
+
+        {/* Compass ring with arrow */}
+        <div style={{
+          width: '80px', height: '80px',
+          border: '2px solid rgba(255,255,255,0.3)',
+          borderRadius: '50%',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          position: 'relative',
+        }}>
+          {/* N label */}
+          <span style={{ position: 'absolute', top: '4px', fontSize: '0.65rem', color: '#ef4444', fontWeight: 700 }}>N</span>
+          {/* Arrow */}
+          <svg width="40" height="40" viewBox="0 0 40 40" style={{ transform: `rotate(${rotation}deg)`, transition: 'transform 0.5s ease' }}>
+            <polygon points="20,4 28,28 20,22 12,28" fill="#7c3aed" opacity="0.9" />
+          </svg>
+        </div>
+      </div>
+    );
+  }
+
+  const rowLabels = ['Upper Ring (point UP)', 'Mid-Upper Ring (tilt up)', 'Mid-Lower Ring (tilt down)', 'Lower Ring (point DOWN)'];
 
   return (
     <div className="tour-capture-overlay">
@@ -249,7 +392,7 @@ export default function TourCapture({ onTourReady, onClose }) {
           <span className="tc-icon">🌐</span>
           <div>
             <h2>360° Tour Capture</h2>
-            <p>{captureCount} / {TOTAL} shots captured</p>
+            <p>{captureCount} / {TOTAL} shots captured{allDone ? ' ✅ All done!' : ''}</p>
           </div>
         </div>
         <button className="tc-close-btn" onClick={onClose} aria-label="Close">✕</button>
@@ -257,64 +400,86 @@ export default function TourCapture({ onTourReady, onClose }) {
 
       {/* ── Progress bar ───────────────────────────────────────────────────── */}
       <div className="tc-progress-bar-track">
-        <div
-          className="tc-progress-bar-fill"
-          style={{ width: `${(captureCount / TOTAL) * 100}%` }}
-        />
+        <div className="tc-progress-bar-fill" style={{ width: `${(captureCount / TOTAL) * 100}%` }} />
       </div>
 
       {/* ── Body ───────────────────────────────────────────────────────────── */}
       <div className="tc-body">
 
-        {/* ── Camera panel ─────────────────────────────────────────────────── */}
+        {/* ── Camera / Viewfinder panel ──────────────────────────────────────── */}
         <div className="tc-camera-panel">
-          {!cameraOn ? (
+          <div className="tc-viewfinder-wrap" style={{ display: cameraState === 'live' ? 'block' : 'none' }}>
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="tc-video"
+            />
+
+            {flashActive && <div className="tc-flash" />}
+
+            {/* Alignment overlay */}
+            {cameraState === 'live' && (
+              <>
+                <AlignmentArrow yaw={currentShot.yaw} pitch={currentShot.pitch} />
+
+                {/* Crosshair */}
+                <div className="tc-guide-overlay">
+                  <div className="tc-guide-crosshair" />
+                  <div className="tc-guide-ring tc-guide-ring-h" />
+                  <div className="tc-guide-ring tc-guide-ring-v" />
+                </div>
+
+                {/* Capture button */}
+                <button className="tc-capture-btn" onClick={captureFrame} aria-label="Capture photo">
+                  <span className="tc-capture-inner" />
+                </button>
+
+                <button className="tc-stop-btn" onClick={stopCamera}>■ Stop</button>
+              </>
+            )}
+          </div>
+
+          {/* Placeholder / Start screen */}
+          {cameraState !== 'live' && (
             <div className="tc-camera-placeholder">
               <div className="tc-placeholder-icon">📷</div>
-              <p>{cameraError ?? `Position yourself at the centre of the scene.\nKeep your camera perfectly still.`}</p>
-              <button className="tc-btn-primary" onClick={startCamera}>Start Camera</button>
-            </div>
-          ) : (
-            <div className="tc-viewfinder-wrap">
-              {/* Flash */}
-              {flashActive && <div className="tc-flash" />}
-
-              {/* Live video */}
-              <video ref={videoRef} autoPlay playsInline muted className="tc-video" />
-
-              {/* Spherical guide overlay */}
-              <div className="tc-guide-overlay">
-                <div className="tc-guide-crosshair" />
-                <div className="tc-guide-ring tc-guide-ring-h" />
-                <div className="tc-guide-ring tc-guide-ring-v" />
-                <div className="tc-guide-label">
-                  <span className="tc-shot-badge">
-                    #{activeShot + 1} — {currentShot.label}
-                  </span>
-                  <span className="tc-shot-sub">
-                    Pitch {currentShot.pitch > 0 ? '+' : ''}{currentShot.pitch}° · Yaw {currentShot.yaw}°
-                  </span>
+              <p style={{ whiteSpace: 'pre-line', textAlign: 'center', lineHeight: 1.6 }}>
+                {cameraError || (
+                  'Stand at the center of the room.\n' +
+                  'Keep your phone perfectly still.\n' +
+                  'Follow the on-screen arrows for each shot.\n' +
+                  'You must capture all 24 shots for best quality.'
+                )}
+              </p>
+              {cameraState === 'idle' && (
+                <button className="tc-btn-primary" onClick={startCamera}>
+                  {captureCount > 0 ? `Resume (shot ${activeShot + 1})` : 'Start Camera'}
+                </button>
+              )}
+              {cameraState === 'starting' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#9090c0' }}>
+                  <div className="tc-spinner" />
+                  <span>Starting camera...</span>
                 </div>
-              </div>
-
-              {/* Capture button */}
-              <button
-                className="tc-capture-btn"
-                onClick={captureFrame}
-                aria-label="Capture photo"
-              >
-                <span className="tc-capture-inner" />
-              </button>
-
-              {/* Stop camera */}
-              <button className="tc-stop-btn" onClick={stopCamera}>■ Stop</button>
+              )}
+              {cameraState === 'error' && (
+                <button className="tc-btn-primary" onClick={startCamera}>Retry Camera</button>
+              )}
+              {/* Debug info */}
+              {debugMsg && (
+                <div style={{ fontSize: '0.7rem', color: '#666', marginTop: '8px' }}>
+                  Debug: {debugMsg}
+                </div>
+              )}
             </div>
           )}
         </div>
 
         {/* ── Shot grid ────────────────────────────────────────────────────── */}
         <div className="tc-grid-panel">
-          <h3 className="tc-grid-title">Shot Map</h3>
+          <h3 className="tc-grid-title">Shot Map — Capture all 24</h3>
 
           {[0, 1, 2, 3].map(rowIdx => {
             const rowShots = SHOTS.filter(s => s.row === rowIdx);
@@ -323,14 +488,20 @@ export default function TourCapture({ onTourReady, onClose }) {
                 <span className="tc-row-label">{rowLabels[rowIdx]}</span>
                 <div className="tc-row-shots">
                   {rowShots.map(shot => {
-                    const done    = !!captured[shot.id];
+                    const done = shot.id in captured;
                     const isActive = shot.id === activeShot;
+                    const isClickable = done || (isActive && cameraState === 'live');
                     return (
                       <button
                         key={shot.id}
                         className={`tc-shot-cell ${done ? 'done' : ''} ${isActive ? 'active' : ''}`}
-                        onClick={() => { setActiveShot(shot.id); if (!cameraOn) requestAnimationFrame(() => startCamera()); }}
+                        onClick={() => {
+                          if (done) retakeShot(shot.id);
+                          else if (isActive && cameraState !== 'live') startCamera();
+                        }}
                         title={shot.label}
+                        disabled={!isClickable && !done}
+                        style={{ opacity: !isClickable && !done ? 0.4 : 1 }}
                       >
                         {done ? (
                           <img
@@ -368,9 +539,9 @@ export default function TourCapture({ onTourReady, onClose }) {
           <div className="tc-stitching-state">
             <div className="tc-spinner" />
             <span>
-              {uploadProgress.total > 0 && uploadProgress.current < uploadProgress.total
-                ? `Uploading shot ${uploadProgress.current} of ${uploadProgress.total}...`
-                : `Fusing ${uploadProgress.total} images with Gemini 3.1 Flash...`}
+              {uploadProgress.current < uploadProgress.total
+                ? `Uploading shot ${uploadProgress.current} of ${uploadProgress.total} to Cloudinary...`
+                : `Fusing ${TOTAL} images with Gemini AI...`}
             </span>
           </div>
         ) : (
@@ -381,14 +552,12 @@ export default function TourCapture({ onTourReady, onClose }) {
             <button
               className={`tc-btn-primary tc-stitch-btn ${allDone ? 'glow' : ''}`}
               onClick={handleStitch}
-              disabled={captureCount < 6 || isStitching}
-              title={captureCount < 6 ? 'Capture at least 6 shots to stitch' : ''}
+              disabled={!allDone || isStitching}
+              title={!allDone ? `Complete all 24 shots (${captureCount}/${TOTAL})` : 'Generate 360° panorama'}
             >
               {allDone
-                ? '✨ Stitch Virtual Tour (24/24)'
-                : captureCount >= 6
-                ? `Stitch with ${captureCount} shots`
-                : `Capture at least 6 shots (${captureCount}/6)`}
+                ? '✨ Generate 360° Virtual Tour'
+                : `Complete all shots (${captureCount}/${TOTAL})`}
             </button>
           </div>
         )}
@@ -396,7 +565,6 @@ export default function TourCapture({ onTourReady, onClose }) {
 
       {/* ── Inline styles ──────────────────────────────────────────────────── */}
       <style jsx>{`
-        /* ── Overlay ── */
         .tour-capture-overlay {
           position: fixed; inset: 0; z-index: 9000;
           background: #07071a;
@@ -404,11 +572,9 @@ export default function TourCapture({ onTourReady, onClose }) {
           font-family: 'Inter', system-ui, sans-serif;
           color: #e8e8f8;
         }
-
-        /* ── Header ── */
         .tc-header {
           display: flex; align-items: center; justify-content: space-between;
-          padding: 16px 24px;
+          padding: 14px 24px;
           background: rgba(255,255,255,0.04);
           border-bottom: 1px solid rgba(255,255,255,0.08);
           backdrop-filter: blur(12px);
@@ -416,7 +582,7 @@ export default function TourCapture({ onTourReady, onClose }) {
         .tc-header-left { display: flex; align-items: center; gap: 14px; }
         .tc-icon { font-size: 28px; }
         .tc-header-left h2 { margin: 0; font-size: 1.1rem; font-weight: 700; color: #fff; }
-        .tc-header-left p  { margin: 2px 0 0; font-size: 0.8rem; color: #9090c0; }
+        .tc-header-left p { margin: 2px 0 0; font-size: 0.8rem; color: #9090c0; }
         .tc-close-btn {
           background: rgba(255,255,255,0.08); border: none; color: #ccc;
           width: 36px; height: 36px; border-radius: 50%; cursor: pointer;
@@ -424,23 +590,18 @@ export default function TourCapture({ onTourReady, onClose }) {
         }
         .tc-close-btn:hover { background: rgba(255,100,100,0.3); }
 
-        /* ── Progress bar ── */
-        .tc-progress-bar-track {
-          height: 3px; background: rgba(255,255,255,0.07);
-        }
+        .tc-progress-bar-track { height: 3px; background: rgba(255,255,255,0.07); }
         .tc-progress-bar-fill {
           height: 100%;
           background: linear-gradient(90deg, #7c3aed, #38bdf8);
           transition: width 0.4s ease;
         }
 
-        /* ── Body ── */
         .tc-body {
           flex: 1; overflow: auto;
           display: flex; gap: 24px; padding: 20px 24px;
         }
 
-        /* ── Camera panel ── */
         .tc-camera-panel {
           flex: 1; min-width: 0;
           display: flex; align-items: stretch;
@@ -454,10 +615,6 @@ export default function TourCapture({ onTourReady, onClose }) {
           padding: 40px;
         }
         .tc-placeholder-icon { font-size: 52px; }
-        .tc-camera-placeholder p {
-          color: #8888aa; font-size: 0.9rem; line-height: 1.5;
-          white-space: pre-line; max-width: 320px;
-        }
 
         .tc-viewfinder-wrap {
           flex: 1; position: relative;
@@ -469,16 +626,14 @@ export default function TourCapture({ onTourReady, onClose }) {
           object-fit: cover; display: block;
         }
 
-        /* Flash */
         .tc-flash {
           position: absolute; inset: 0;
           background: white; opacity: 0.7;
-          animation: flashOut 0.2s forwards;
+          animation: flashOut 0.25s forwards;
           pointer-events: none; z-index: 20;
         }
         @keyframes flashOut { to { opacity: 0; } }
 
-        /* Spherical guide */
         .tc-guide-overlay {
           position: absolute; inset: 0;
           display: flex; align-items: center; justify-content: center;
@@ -486,56 +641,32 @@ export default function TourCapture({ onTourReady, onClose }) {
         }
         .tc-guide-crosshair {
           position: absolute;
-          width: 40px; height: 40px;
-          border: 2px solid rgba(124,58,237,0.9);
+          width: 60px; height: 60px;
+          border: 2px solid rgba(124,58,237,0.6);
           border-radius: 50%;
-          box-shadow: 0 0 16px rgba(124,58,237,0.6);
         }
         .tc-guide-crosshair::before, .tc-guide-crosshair::after {
-          content: '';
-          position: absolute;
-          background: rgba(124,58,237,0.7);
+          content: ''; position: absolute; background: rgba(124,58,237,0.5);
         }
         .tc-guide-crosshair::before {
-          width: 1px; height: 20px;
-          top: -24px; left: 50%; transform: translateX(-50%);
+          width: 1px; height: 24px; top: -28px; left: 50%; transform: translateX(-50%);
         }
         .tc-guide-crosshair::after {
-          height: 1px; width: 20px;
-          left: -24px; top: 50%; transform: translateY(-50%);
+          height: 1px; width: 24px; left: -28px; top: 50%; transform: translateY(-50%);
         }
-
         .tc-guide-ring {
           position: absolute;
-          border: 1px solid rgba(56,189,248,0.3);
+          border: 1px dashed rgba(56,189,248,0.25);
           border-radius: 50%;
         }
-        .tc-guide-ring-h { width: 80%; height: 20%; }
-        .tc-guide-ring-v { width: 20%; height: 80%; }
+        .tc-guide-ring-h { width: 70%; height: 25%; }
+        .tc-guide-ring-v { width: 25%; height: 70%; }
 
-        .tc-guide-label {
-          position: absolute; bottom: 80px; left: 50%;
-          transform: translateX(-50%);
-          display: flex; flex-direction: column; align-items: center; gap: 4px;
-        }
-        .tc-shot-badge {
-          background: rgba(124,58,237,0.85); color: white;
-          padding: 4px 14px; border-radius: 999px;
-          font-size: 0.8rem; font-weight: 700;
-          backdrop-filter: blur(8px);
-        }
-        .tc-shot-sub {
-          background: rgba(0,0,0,0.6); color: #ccc;
-          padding: 2px 10px; border-radius: 999px;
-          font-size: 0.7rem;
-        }
-
-        /* Capture button */
         .tc-capture-btn {
-          position: absolute; bottom: 20px; left: 50%;
+          position: absolute; bottom: 24px; left: 50%;
           transform: translateX(-50%);
-          width: 64px; height: 64px;
-          background: rgba(255,255,255,0.15);
+          width: 72px; height: 72px;
+          background: rgba(255,255,255,0.12);
           border: 3px solid white;
           border-radius: 50%; cursor: pointer;
           display: flex; align-items: center; justify-content: center;
@@ -545,22 +676,21 @@ export default function TourCapture({ onTourReady, onClose }) {
         .tc-capture-btn:hover { background: rgba(255,255,255,0.25); }
         .tc-capture-btn:active { transform: translateX(-50%) scale(0.92); }
         .tc-capture-inner {
-          width: 48px; height: 48px;
+          width: 54px; height: 54px;
           background: white; border-radius: 50%;
           transition: transform 0.1s;
         }
-        .tc-capture-btn:active .tc-capture-inner { transform: scale(0.9); }
+        .tc-capture-btn:active .tc-capture-inner { transform: scale(0.88); }
 
         .tc-stop-btn {
           position: absolute; top: 12px; right: 12px;
           background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2);
           color: #ccc; padding: 4px 12px; border-radius: 8px;
           cursor: pointer; font-size: 0.75rem;
-          transition: background 0.2s;
+          transition: background 0.2s; z-index: 15;
         }
         .tc-stop-btn:hover { background: rgba(220,50,50,0.4); }
 
-        /* ── Shot grid ── */
         .tc-grid-panel {
           width: 340px; flex-shrink: 0;
           display: flex; flex-direction: column; gap: 12px;
@@ -589,15 +719,16 @@ export default function TourCapture({ onTourReady, onClose }) {
           cursor: pointer; display: flex;
           align-items: center; justify-content: center;
           font-size: 0.65rem; color: #6666aa;
-          transition: border-color 0.2s, box-shadow 0.2s;
+          transition: border-color 0.2s, box-shadow 0.2s, opacity 0.2s;
           padding: 0;
         }
-        .tc-shot-cell:hover { border-color: rgba(124,58,237,0.5); }
+        .tc-shot-cell:hover:not(:disabled) { border-color: rgba(124,58,237,0.5); }
         .tc-shot-cell.active {
           border-color: #7c3aed;
           box-shadow: 0 0 0 2px rgba(124,58,237,0.4);
         }
         .tc-shot-cell.done { border-color: rgba(56,189,248,0.5); }
+        .tc-shot-cell:disabled { cursor: not-allowed; }
         .tc-shot-thumb {
           width: 100%; height: 100%; object-fit: cover; display: block;
         }
@@ -609,12 +740,11 @@ export default function TourCapture({ onTourReady, onClose }) {
           color: #ccc; font-size: 0.55rem;
           border-radius: 3px; cursor: pointer;
           display: flex; align-items: center; justify-content: center;
-          padding: 0;
+          padding: 0; z-index: 2;
         }
 
-        /* ── Footer ── */
         .tc-footer {
-          padding: 16px 24px;
+          padding: 14px 24px;
           background: rgba(255,255,255,0.03);
           border-top: 1px solid rgba(255,255,255,0.07);
           display: flex; flex-direction: column; gap: 10px;
@@ -623,12 +753,11 @@ export default function TourCapture({ onTourReady, onClose }) {
           display: flex; justify-content: flex-end; gap: 12px; align-items: center;
         }
         .tc-error-banner {
-          background: rgba(220,50,50,0.2); border: 1px solid rgba(220,50,50,0.4);
+          background: rgba(220,50,50,0.15); border: 1px solid rgba(220,50,50,0.3);
           color: #ff8888; padding: 8px 16px; border-radius: 8px;
           font-size: 0.82rem;
         }
 
-        /* Buttons */
         .tc-btn-primary {
           background: linear-gradient(135deg, #7c3aed, #5b21b6);
           color: white; border: none; padding: 10px 22px;
@@ -658,7 +787,6 @@ export default function TourCapture({ onTourReady, onClose }) {
         }
         .tc-btn-ghost:hover { border-color: rgba(255,255,255,0.3); color: #ccc; }
 
-        /* Stitching spinner */
         .tc-stitching-state {
           display: flex; align-items: center; justify-content: center;
           gap: 14px; color: #9090c0; font-size: 0.88rem;
@@ -672,7 +800,6 @@ export default function TourCapture({ onTourReady, onClose }) {
         }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* Scrollbar */
         .tc-grid-panel::-webkit-scrollbar { width: 4px; }
         .tc-grid-panel::-webkit-scrollbar-track { background: transparent; }
         .tc-grid-panel::-webkit-scrollbar-thumb { background: rgba(124,58,237,0.4); border-radius: 2px; }
