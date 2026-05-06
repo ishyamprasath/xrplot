@@ -58,29 +58,70 @@ export default function TourCapture({ onTourReady, onClose }) {
 
   // ── Camera helpers ──────────────────────────────────────────────────────────
   const startCamera = useCallback(async () => {
+    // Prevent double-start
+    if (streamRef.current) return;
     try {
       setCameraError(null);
-      const stream = await navigator.mediaDevices.getUserMedia({
+      const constraints = {
         video: {
-          facingMode: { ideal: 'environment' },
-          width:  { ideal: 1920 }, // 1080p is plenty for stitching and faster to upload
+          facingMode: 'environment',
+          width:  { ideal: 1920 },
           height: { ideal: 1080 },
         },
-      });
+      };
+
+      // On desktop or devices without back camera, fallback to any camera
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+      } catch (envErr) {
+        console.warn('Environment camera not available, trying any camera:', envErr);
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1920 }, height: { ideal: 1080 } }
+        });
+      }
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
+
+        // Explicitly play the video — required on some browsers (iOS Safari)
+        try {
+          await videoRef.current.play();
+        } catch (playErr) {
+          console.warn('Auto-play failed, waiting for user interaction:', playErr);
+        }
+
+        // Wait for video metadata so dimensions are available
+        if (videoRef.current.readyState < 2) {
+          await new Promise((resolve, reject) => {
+            const onLoaded = () => { videoRef.current.removeEventListener('loadedmetadata', onLoaded); resolve(); };
+            const onError = () => { videoRef.current.removeEventListener('error', onError); reject(new Error('Video failed to load')); };
+            videoRef.current.addEventListener('loadedmetadata', onLoaded, { once: true });
+            videoRef.current.addEventListener('error', onError, { once: true });
+          });
+        }
+
         setCameraOn(true);
       }
     } catch (err) {
       console.error('Camera error:', err);
-      setCameraError('Cannot access camera. Check browser permissions and try again.');
+      setCameraError(
+        err.name === 'NotAllowedError'
+          ? 'Camera permission denied. Please allow camera access in your browser settings and reload the page.'
+          : err.name === 'NotFoundError'
+          ? 'No camera found on this device.'
+          : 'Cannot access camera. Check browser permissions and try again.'
+      );
     }
   }, []);
 
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach(t => t.stop());
     streamRef.current = null;
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
     setCameraOn(false);
   }, []);
 
@@ -88,17 +129,21 @@ export default function TourCapture({ onTourReady, onClose }) {
 
   // ── Capture a single frame ──────────────────────────────────────────────────
   const captureFrame = useCallback(() => {
-    if (!videoRef.current) return;
+    const video = videoRef.current;
+    if (!video || !video.videoWidth || !video.videoHeight) {
+      console.error('Video element not ready or has no dimensions');
+      setCameraError('Camera not ready. Please wait a moment and try again.');
+      return;
+    }
 
-    const video  = videoRef.current;
     const canvas = document.createElement('canvas');
-    
-    // Resize for faster processing and upload (1280x720 is usually enough for LMM understanding)
+
+    // Resize for faster processing and upload
     const MAX_W = 1280;
     const scale = Math.min(1, MAX_W / video.videoWidth);
-    canvas.width  = video.videoWidth * scale;
-    canvas.height = video.videoHeight * scale;
-    
+    canvas.width  = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
+
     const ctx = canvas.getContext('2d');
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
@@ -110,12 +155,19 @@ export default function TourCapture({ onTourReady, onClose }) {
     setFlashActive(true);
     setTimeout(() => setFlashActive(false), 200);
 
-    setCaptured(prev => ({ ...prev, [currentShot.id]: base64 }));
+    // Use functional update for both captured state AND next shot selection
+    setCaptured(prev => {
+      const nextCaptured = { ...prev, [currentShot.id]: base64 };
 
-    // Advance to the next uncaptured shot
-    const next = SHOTS.find(s => s.id !== currentShot.id && !captured[s.id]);
-    if (next) setActiveShot(next.id);
-  }, [currentShot, captured]);
+      // Find next uncaptured shot using the freshly updated state
+      const next = SHOTS.find(s => !nextCaptured[s.id]);
+      if (next) {
+        setActiveShot(next.id);
+      }
+
+      return nextCaptured;
+    });
+  }, [currentShot]);
 
   // ── Retake a shot ───────────────────────────────────────────────────────────
   const retakeShot = useCallback((shotId) => {
@@ -125,7 +177,10 @@ export default function TourCapture({ onTourReady, onClose }) {
       return updated;
     });
     setActiveShot(shotId);
-    if (!cameraOn) startCamera();
+    // Defer camera start so the video element renders first
+    if (!cameraOn) {
+      requestAnimationFrame(() => startCamera());
+    }
   }, [cameraOn, startCamera]);
 
   // ── Stitch via API ──────────────────────────────────────────────────────────
@@ -274,7 +329,7 @@ export default function TourCapture({ onTourReady, onClose }) {
                       <button
                         key={shot.id}
                         className={`tc-shot-cell ${done ? 'done' : ''} ${isActive ? 'active' : ''}`}
-                        onClick={() => { setActiveShot(shot.id); if (!cameraOn) startCamera(); }}
+                        onClick={() => { setActiveShot(shot.id); if (!cameraOn) requestAnimationFrame(() => startCamera()); }}
                         title={shot.label}
                       >
                         {done ? (
