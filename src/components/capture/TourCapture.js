@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { flushSync } from 'react-dom';
 
 // ─── Shot definition ──────────────────────────────────────────────────────────
 // 24 shots covering the full sphere in 4 rows × 6 columns
@@ -73,17 +74,24 @@ export default function TourCapture({ onTourReady, onClose }) {
   const currentShot  = SHOTS[activeShot];
   const allDone      = captureCount === TOTAL;
 
-  // ── Connect pending stream to video element using timeout polling ─────────────
-  const connectStreamToVideo = useCallback(async () => {
-    if (!pendingStreamRef.current || !videoRef.current) return;
+  // ── Verify video element is actually in the DOM ──────────────────────────
+  const isVideoInDocument = () => {
+    return videoRef.current && document.contains(videoRef.current);
+  };
+
+  // ── Connect stream to video element ────────────────────────────────────────
+  const connectStreamToVideo = useCallback(async (stream) => {
+    if (!stream || !isVideoInDocument()) {
+      console.log('[CAMERA DEBUG] Video element not in DOM, aborting connection');
+      return;
+    }
     
     try {
       console.log('[CAMERA DEBUG] Connecting stream to video element...');
       setDebugMsg('Step 3: Assigning stream to video...');
 
-      videoRef.current.srcObject = pendingStreamRef.current;
-      streamRef.current = pendingStreamRef.current;
-      pendingStreamRef.current = null;
+      videoRef.current.srcObject = stream;
+      streamRef.current = stream;
 
       console.log('[CAMERA DEBUG] Stream assigned. Calling play()...');
       setDebugMsg('Step 4: Calling video.play()...');
@@ -131,48 +139,6 @@ export default function TourCapture({ onTourReady, onClose }) {
     }
   }, []);
 
-  // Connect stream to video when camera is starting
-  useEffect(() => {
-    if (cameraState === 'starting' && pendingStreamRef.current && !streamRef.current) {
-      // If video element is already available, connect immediately
-      if (videoRef.current) {
-        console.log('[CAMERA DEBUG] Video element already mounted, connecting immediately...');
-        connectStreamToVideo();
-        return;
-      }
-      
-      // Otherwise, poll for video element
-      console.log('[CAMERA DEBUG] Starting polling for video element...');
-      setDebugMsg('Step 2b: Waiting for video element to mount...');
-      
-      const pollInterval = setInterval(() => {
-        if (videoRef.current) {
-          clearInterval(pollInterval);
-          console.log('[CAMERA DEBUG] Video element detected, connecting...');
-          connectStreamToVideo();
-        }
-      }, 50);
-      
-      // Timeout after 5 seconds
-      connectTimeoutRef.current = setTimeout(() => {
-        clearInterval(pollInterval);
-        if (!videoRef.current) {
-          console.error('[CAMERA DEBUG] Video element never mounted');
-          setDebugMsg('Step 2b ERR: Video element timeout');
-          setCameraError('Video element failed to load. Please reload and try again.');
-          setCameraState('error');
-        }
-      }, 5000);
-      
-      return () => {
-        clearInterval(pollInterval);
-        if (connectTimeoutRef.current) {
-          clearTimeout(connectTimeoutRef.current);
-        }
-      };
-    }
-  }, [cameraState, connectStreamToVideo]);
-
   // ── Start camera ────────────────────────────────────────────────────────────
   const startCamera = useCallback(async () => {
     console.log('[CAMERA DEBUG] startCamera() called');
@@ -183,7 +149,11 @@ export default function TourCapture({ onTourReady, onClose }) {
     setCameraError(null);
     setDebugMsg('Step 1: Requesting camera permission...');
     console.log('[CAMERA DEBUG] Setting cameraState=starting');
-    setCameraState('starting');
+    
+    // Force synchronous render so video element is created before getUserMedia completes
+    flushSync(() => {
+      setCameraState('starting');
+    });
 
     try {
       const constraints = {
@@ -208,11 +178,41 @@ export default function TourCapture({ onTourReady, onClose }) {
       }
 
       console.log('[CAMERA DEBUG] Stream tracks:', stream.getTracks().map(t => ({ kind: t.kind, label: t.label, readyState: t.readyState })));
-      pendingStreamRef.current = stream;
-      setDebugMsg('Step 2: Stream obtained. Waiting for video element to mount...');
-      console.log('[CAMERA DEBUG] Stream stored in pendingStreamRef. videoRef.current=', !!videoRef.current);
+      setDebugMsg('Step 2: Stream obtained. Connecting to video...');
+      console.log('[CAMERA DEBUG] Stream obtained. videoRef.current=', !!videoRef.current);
 
-      // The useEffect above will detect cameraState==='starting' + pendingStream and connect
+      // If video element is already mounted and in DOM, connect immediately
+      if (isVideoInDocument()) {
+        console.log('[CAMERA DEBUG] Video element ready and in DOM, connecting immediately');
+        await connectStreamToVideo(stream);
+      } else {
+        // Video element not yet rendered, poll for it
+        console.log('[CAMERA DEBUG] Video element not ready, starting poll...');
+        setDebugMsg('Step 2b: Waiting for video element to mount...');
+        pendingStreamRef.current = stream;
+
+        const pollInterval = setInterval(() => {
+          if (isVideoInDocument() && pendingStreamRef.current) {
+            clearInterval(pollInterval);
+            console.log('[CAMERA DEBUG] Video element detected via poll, connecting...');
+            const pendingStream = pendingStreamRef.current;
+            pendingStreamRef.current = null;
+            connectStreamToVideo(pendingStream);
+          }
+        }, 50);
+
+        // Timeout after 5 seconds
+        connectTimeoutRef.current = setTimeout(() => {
+          clearInterval(pollInterval);
+          if (pendingStreamRef.current) {
+            pendingStreamRef.current = null;
+            console.error('[CAMERA DEBUG] Video element never mounted');
+            setDebugMsg('Step 2b ERR: Video element timeout');
+            setCameraError('Video element failed to load. Please reload and try again.');
+            setCameraState('error');
+          }
+        }, 5000);
+      }
     } catch (err) {
       console.error('[CAMERA DEBUG] Camera access FAILED:', err.name, err.message);
       let msg = 'Cannot access camera.';
@@ -234,7 +234,10 @@ export default function TourCapture({ onTourReady, onClose }) {
     streamRef.current?.getTracks().forEach(t => t.stop());
     streamRef.current = null;
     pendingStreamRef.current = null;
-    if (videoRef.current) videoRef.current.srcObject = null;
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+      videoRef.current = null;
+    }
     setCameraState('idle');
     setDebugMsg('Camera stopped');
   }, []);
@@ -243,6 +246,7 @@ export default function TourCapture({ onTourReady, onClose }) {
   useEffect(() => () => {
     streamRef.current?.getTracks().forEach(t => t.stop());
     pendingStreamRef.current?.getTracks().forEach(t => t.stop());
+    videoRef.current = null;
   }, []);
 
   // ── Capture the current shot ──────────────────────────────────────────────
