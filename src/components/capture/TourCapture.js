@@ -67,46 +67,122 @@ export default function TourCapture({ onTourReady, onClose }) {
   const videoRef  = useRef(null);
   const streamRef = useRef(null);
   const pendingStreamRef = useRef(null); // stream obtained before video element mounts
+  const connectTimeoutRef = useRef(null);
 
   const captureCount = Object.keys(captured).length;
   const currentShot  = SHOTS[activeShot];
   const allDone      = captureCount === TOTAL;
 
-  // ── Connect pending stream to video element when it mounts ────────────────
+  // ── Connect pending stream to video element using timeout polling ─────────────
+  const connectStreamToVideo = useCallback(async () => {
+    if (!pendingStreamRef.current || !videoRef.current) return;
+    
+    try {
+      console.log('[CAMERA DEBUG] Connecting stream to video element...');
+      setDebugMsg('Step 3: Assigning stream to video...');
+
+      videoRef.current.srcObject = pendingStreamRef.current;
+      streamRef.current = pendingStreamRef.current;
+      pendingStreamRef.current = null;
+
+      console.log('[CAMERA DEBUG] Stream assigned. Calling play()...');
+      setDebugMsg('Step 4: Calling video.play()...');
+
+      try {
+        await videoRef.current.play();
+        console.log('[CAMERA DEBUG] play() succeeded. readyState:', videoRef.current.readyState);
+        setDebugMsg(`Step 5: play() OK | readyState=${videoRef.current.readyState}`);
+      } catch (e) {
+        console.warn('[CAMERA DEBUG] play() warning:', e.name, e.message);
+        setDebugMsg(`Step 5 ERR: play() failed - ${e.name}`);
+      }
+
+      if (videoRef.current.readyState < 2) {
+        console.log('[CAMERA DEBUG] Waiting for loadedmetadata... readyState:', videoRef.current.readyState);
+        setDebugMsg('Step 6: Waiting for loadedmetadata event...');
+        await new Promise((res, rej) => {
+          const t = setTimeout(() => {
+            console.error('[CAMERA DEBUG] loadedmetadata TIMEOUT after 3s');
+            setDebugMsg('Step 6 ERR: Metadata timeout (3s)');
+            rej(new Error('video metadata timeout'));
+          }, 3000);
+          const onMeta = () => {
+            console.log('[CAMERA DEBUG] loadedmetadata FIRED!');
+            setDebugMsg('Step 6: loadedmetadata ✅');
+            clearTimeout(t);
+            videoRef.current?.removeEventListener('loadedmetadata', onMeta);
+            res();
+          };
+          videoRef.current.addEventListener('loadedmetadata', onMeta, { once: true });
+        });
+      } else {
+        console.log('[CAMERA DEBUG] readyState >= 2, skipping metadata wait');
+        setDebugMsg('Step 6: readyState OK, skip wait');
+      }
+
+      console.log('[CAMERA DEBUG] SUCCESS! Transitioning to live');
+      setDebugMsg('Step 7: Camera LIVE ✅');
+      setCameraState('live');
+    } catch (err) {
+      console.error('[CAMERA DEBUG] FAILED to connect stream to video:', err);
+      setDebugMsg(`Step ERR: ${err.message}`);
+      setCameraError('Failed to start video feed. Please reload and try again.');
+      setCameraState('error');
+    }
+  }, []);
+
+  // Connect stream to video when camera is starting
   useEffect(() => {
-    if (pendingStreamRef.current && videoRef.current && cameraState === 'starting') {
-      const connect = async () => {
-        try {
-          videoRef.current.srcObject = pendingStreamRef.current;
-          streamRef.current = pendingStreamRef.current;
-          pendingStreamRef.current = null;
-
-          try { await videoRef.current.play(); } catch (e) { console.warn('play() warning:', e); }
-
-          if (videoRef.current.readyState < 2) {
-            await new Promise((res, rej) => {
-              const t = setTimeout(() => rej(new Error('video metadata timeout')), 3000);
-              const onMeta = () => { clearTimeout(t); videoRef.current?.removeEventListener('loadedmetadata', onMeta); res(); };
-              videoRef.current.addEventListener('loadedmetadata', onMeta, { once: true });
-            });
-          }
-          setCameraState('live');
-          setDebugMsg('Camera connected ✅');
-        } catch (err) {
-          console.error('Failed to connect stream to video:', err);
-          setCameraError('Failed to start video feed. Please reload and try again.');
+    if (cameraState === 'starting' && pendingStreamRef.current && !streamRef.current) {
+      // If video element is already available, connect immediately
+      if (videoRef.current) {
+        console.log('[CAMERA DEBUG] Video element already mounted, connecting immediately...');
+        connectStreamToVideo();
+        return;
+      }
+      
+      // Otherwise, poll for video element
+      console.log('[CAMERA DEBUG] Starting polling for video element...');
+      setDebugMsg('Step 2b: Waiting for video element to mount...');
+      
+      const pollInterval = setInterval(() => {
+        if (videoRef.current) {
+          clearInterval(pollInterval);
+          console.log('[CAMERA DEBUG] Video element detected, connecting...');
+          connectStreamToVideo();
+        }
+      }, 50);
+      
+      // Timeout after 5 seconds
+      connectTimeoutRef.current = setTimeout(() => {
+        clearInterval(pollInterval);
+        if (!videoRef.current) {
+          console.error('[CAMERA DEBUG] Video element never mounted');
+          setDebugMsg('Step 2b ERR: Video element timeout');
+          setCameraError('Video element failed to load. Please reload and try again.');
           setCameraState('error');
         }
+      }, 5000);
+      
+      return () => {
+        clearInterval(pollInterval);
+        if (connectTimeoutRef.current) {
+          clearTimeout(connectTimeoutRef.current);
+        }
       };
-      connect();
     }
-  }, [cameraState]);
+  }, [cameraState, connectStreamToVideo]);
 
   // ── Start camera ────────────────────────────────────────────────────────────
   const startCamera = useCallback(async () => {
-    if (streamRef.current || pendingStreamRef.current) return;
+    console.log('[CAMERA DEBUG] startCamera() called');
+    if (streamRef.current || pendingStreamRef.current) {
+      console.log('[CAMERA DEBUG] Already has stream, returning');
+      return;
+    }
     setCameraError(null);
-    setDebugMsg('Requesting camera permission...');
+    setDebugMsg('Step 1: Requesting camera permission...');
+    console.log('[CAMERA DEBUG] Setting cameraState=starting');
     setCameraState('starting');
 
     try {
@@ -117,23 +193,28 @@ export default function TourCapture({ onTourReady, onClose }) {
           height: { ideal: 1080 },
         },
       };
+      console.log('[CAMERA DEBUG] Calling getUserMedia with constraints:', constraints);
 
       let stream;
       try {
         stream = await navigator.mediaDevices.getUserMedia(constraints);
+        console.log('[CAMERA DEBUG] getUserMedia SUCCESS (environment camera)');
       } catch (envErr) {
-        console.warn('Environment camera not available, trying any camera:', envErr);
+        console.warn('[CAMERA DEBUG] Environment camera failed:', envErr.name, envErr.message);
         stream = await navigator.mediaDevices.getUserMedia({
           video: { width: { ideal: 1920 }, height: { ideal: 1080 } }
         });
+        console.log('[CAMERA DEBUG] getUserMedia SUCCESS (any camera fallback)');
       }
 
+      console.log('[CAMERA DEBUG] Stream tracks:', stream.getTracks().map(t => ({ kind: t.kind, label: t.label, readyState: t.readyState })));
       pendingStreamRef.current = stream;
-      setDebugMsg('Stream obtained. Connecting to video element...');
+      setDebugMsg('Step 2: Stream obtained. Waiting for video element to mount...');
+      console.log('[CAMERA DEBUG] Stream stored in pendingStreamRef. videoRef.current=', !!videoRef.current);
 
       // The useEffect above will detect cameraState==='starting' + pendingStream and connect
     } catch (err) {
-      console.error('Camera access error:', err);
+      console.error('[CAMERA DEBUG] Camera access FAILED:', err.name, err.message);
       let msg = 'Cannot access camera.';
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
         msg = 'Camera permission denied. Please allow camera access in your browser settings and reload the page.';
@@ -144,7 +225,7 @@ export default function TourCapture({ onTourReady, onClose }) {
       }
       setCameraError(msg);
       setCameraState('error');
-      setDebugMsg(`Error: ${err.name}`);
+      setDebugMsg(`Step 1 ERR: ${err.name}`);
     }
   }, []);
 
@@ -408,16 +489,52 @@ export default function TourCapture({ onTourReady, onClose }) {
 
         {/* ── Camera / Viewfinder panel ──────────────────────────────────────── */}
         <div className="tc-camera-panel">
-          <div className="tc-viewfinder-wrap" style={{ display: cameraState === 'live' ? 'block' : 'none' }}>
+          <div className="tc-viewfinder-wrap" style={{ display: cameraState === 'live' || cameraState === 'starting' ? 'block' : 'none' }}>
             <video
               ref={videoRef}
               autoPlay
               playsInline
               muted
               className="tc-video"
+              onLoadedMetadata={() => {
+                console.log('[CAMERA DEBUG] onLoadedMetadata event fired! readyState:', videoRef.current?.readyState);
+              }}
+              onPlay={() => {
+                console.log('[CAMERA DEBUG] onPlay event fired!');
+              }}
+              onError={(e) => {
+                console.error('[CAMERA DEBUG] Video error:', e);
+              }}
             />
 
             {flashActive && <div className="tc-flash" />}
+
+            {/* Starting overlay */}
+            {cameraState === 'starting' && (
+              <div style={{
+                position: 'absolute', inset: 0,
+                display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center',
+                gap: '12px', zIndex: 12, background: 'rgba(7,7,26,0.85)',
+              }}>
+                <div className="tc-spinner" />
+                <span style={{ color: '#9090c0', fontSize: '0.85rem' }}>Starting camera...</span>
+                {debugMsg && (
+                  <div style={{
+                    fontSize: '0.75rem',
+                    color: debugMsg.includes('ERR') ? '#ff6b6b' : debugMsg.includes('✅') ? '#51cf66' : '#a0a0d0',
+                    background: 'rgba(0,0,0,0.5)',
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    maxWidth: '90%',
+                    textAlign: 'center',
+                    fontFamily: 'monospace',
+                  }}>
+                    {debugMsg}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Alignment overlay */}
             {cameraState === 'live' && (
@@ -442,7 +559,7 @@ export default function TourCapture({ onTourReady, onClose }) {
           </div>
 
           {/* Placeholder / Start screen */}
-          {cameraState !== 'live' && (
+          {cameraState !== 'live' && cameraState !== 'starting' && (
             <div className="tc-camera-placeholder">
               <div className="tc-placeholder-icon">📷</div>
               <p style={{ whiteSpace: 'pre-line', textAlign: 'center', lineHeight: 1.6 }}>
@@ -469,7 +586,16 @@ export default function TourCapture({ onTourReady, onClose }) {
               )}
               {/* Debug info */}
               {debugMsg && (
-                <div style={{ fontSize: '0.7rem', color: '#666', marginTop: '8px' }}>
+                <div style={{
+                  fontSize: '0.72rem',
+                  color: debugMsg.includes('ERR') ? '#ff6b6b' : debugMsg.includes('✅') ? '#51cf66' : '#7070a0',
+                  marginTop: '8px',
+                  background: 'rgba(0,0,0,0.3)',
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  fontFamily: 'monospace',
+                  maxWidth: '100%',
+                }}>
                   Debug: {debugMsg}
                 </div>
               )}
