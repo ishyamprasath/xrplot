@@ -115,7 +115,10 @@ export default function WorldCanvas({ world, onSave, saving, lastSaved, onBack, 
   }, [world, setNodes, setEdges]);
 
   const doSave = useCallback(() => {
-    const worldNodes = nodes.map(n => ({
+    const currentNodes = nodesRef.current;
+    const currentEdges = edgesRef.current;
+    const currentWorldName = worldNameRef.current;
+    const worldNodes = currentNodes.map(n => ({
       id: n.id,
       label: n.data.label,
       position: n.position,
@@ -125,7 +128,7 @@ export default function WorldCanvas({ world, onSave, saving, lastSaved, onBack, 
       status: n.data.status || 'empty',
     }));
     
-    const worldEdges = edges.map(e => ({
+    const worldEdges = currentEdges.map(e => ({
       id: e.id,
       source: e.source,
       target: e.target,
@@ -134,15 +137,15 @@ export default function WorldCanvas({ world, onSave, saving, lastSaved, onBack, 
       status: e.data?.status || 'empty',
     }));
     
-    onSave({ name: worldName, nodes: worldNodes, edges: worldEdges });
-  }, [nodes, edges, worldName, onSave]);
+    onSave({ name: currentWorldName, nodes: worldNodes, edges: worldEdges });
+  }, [onSave]);
 
-  // Simple effect for auto-saving when nodes or edges change
+  // Auto-save when nodes, edges, or name change
   useEffect(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(doSave, 1000);
     return () => clearTimeout(saveTimerRef.current);
-  }, [doSave]);
+  }, [nodes, edges, worldName, doSave]);
 
   const triggerSave = useCallback(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);

@@ -13,6 +13,7 @@
     "@clerk/themes": "^2.0.0",
     "@google-cloud/aiplatform": "^6.7.0",
     "@google-cloud/vertexai": "^1.12.0",
+    "@google/genai": "^1.52.0",
     "@google/generative-ai": "^0.21.0",
     "@xyflow/react": "^12.0.0",
     "axios": "^1.16.0",

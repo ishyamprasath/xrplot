@@ -43,8 +43,6 @@ export default function WorldEditorPage() {
         body: JSON.stringify(updatedData),
       });
       if (res.ok) {
-        const data = await res.json();
-        setWorld(data);
         setLastSaved(new Date());
       }
     } catch (err) {

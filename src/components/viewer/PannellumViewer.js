@@ -1,93 +1,112 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import 'pannellum/build/pannellum.css';
-import pannellum from 'pannellum';
 
-export default function PannellumViewer({ imageUrl, width = '100%', height = '100%', hotspots = [], onHotspotClick }) {
+export default function PannellumViewer({ imageUrl, width = '100%', height = '100%', hotspots: hotspotsProp, onHotspotClick }) {
   const containerRef = useRef(null);
   const viewerRef = useRef(null);
   const [loading, setLoading] = useState(true);
+  const hotspots = useMemo(() => hotspotsProp || [], [hotspotsProp]);
+
+  const [scriptLoaded, setScriptLoaded] = useState(false);
 
   useEffect(() => {
-    if (!containerRef.current || !imageUrl) return;
+    if (typeof window.pannellum !== 'undefined') {
+      setScriptLoaded(true);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = '/pannellum.js';
+    script.async = true;
+    script.onload = () => setScriptLoaded(true);
+    document.head.appendChild(script);
+    return () => {
+      document.head.removeChild(script);
+    };
+  }, []);
 
-    // Clean up previous viewer
+  useEffect(() => {
+    const pannellum = window.pannellum;
+    if (!containerRef.current || !imageUrl || !pannellum) return;
+
     if (viewerRef.current) {
       viewerRef.current.destroy();
       viewerRef.current = null;
     }
 
-    // Convert hotspots to Pannellum format
-    const pannellumHotspots = hotspots.map(hotspot => ({
-      pitch: hotspot.pitch || 0,
-      yaw: hotspot.yaw || 0,
-      type: hotspot.type || 'info',
-      text: hotspot.text || '',
-      URL: hotspot.url || '',
-      sceneId: hotspot.sceneId || '',
-      targetPitch: hotspot.targetPitch || 0,
-      targetYaw: hotspot.targetYaw || 0,
-      clickHandlerFunc: () => {
-        if (onHotspotClick) {
-          onHotspotClick(hotspot);
+    // Preload the panorama image so we know exactly when it's ready
+    setLoading(true);
+    const img = new window.Image();
+    let cancelled = false;
+
+    img.onload = () => {
+      if (cancelled) return;
+      const pannellumHotspots = hotspots.map(hotspot => ({
+        pitch: hotspot.pitch || 0,
+        yaw: hotspot.yaw || 0,
+        type: hotspot.type || 'info',
+        text: hotspot.text || '',
+        URL: hotspot.url || '',
+        sceneId: hotspot.sceneId || '',
+        targetPitch: hotspot.targetPitch || 0,
+        targetYaw: hotspot.targetYaw || 0,
+        clickHandlerFunc: () => {
+          if (onHotspotClick) {
+            onHotspotClick(hotspot);
+          }
         }
-      }
-    }));
+      }));
 
-    // Initialize Pannellum viewer
-    viewerRef.current = pannellum.viewer(containerRef.current, {
-      type: 'equirectangular',
-      panorama: imageUrl,
-      autoRotate: -2, // Auto rotation
-      autoLoad: true,
-      compass: true,
-      northOffset: 0,
-      hotspots: pannellumHotspots,
-      sceneFadeIn: 1000,
-      minPitch: -85,
-      maxPitch: 85,
-      minYaw: -180,
-      maxYaw: 180,
-      hfov: 100, // Horizontal field of view
-      pitch: 0,
-      yaw: 0,
-      loadButton: false, // Hide load button
-      showFullscreenCtrl: true,
-      showZoomCtrl: true,
-      keyboardZoom: true,
-      mouseZoom: true,
-      draggable: true,
-      disableKeyboardCtrl: false,
-      preview: imageUrl,
-      previewTitle: 'Loading...',
-      onerror: (err) => {
-        console.error('Pannellum error:', err);
-        setLoading(false);
-      }
-    });
+      viewerRef.current = pannellum.viewer(containerRef.current, {
+        type: 'equirectangular',
+        panorama: img.src,
+        autoRotate: -2,
+        autoLoad: true,
+        compass: true,
+        northOffset: 0,
+        hotspots: pannellumHotspots,
+        sceneFadeIn: 1000,
+        minPitch: -85,
+        maxPitch: 85,
+        minYaw: -180,
+        maxYaw: 180,
+        hfov: 100,
+        pitch: 0,
+        yaw: 0,
+        loadButton: false,
+        showFullscreenCtrl: true,
+        showZoomCtrl: true,
+        keyboardZoom: true,
+        mouseZoom: true,
+        draggable: true,
+        disableKeyboardCtrl: false,
+      });
 
-    // Handle load event
-    const handleLoad = () => {
       setLoading(false);
     };
 
-    // Add event listener for load
-    const container = containerRef.current;
-    container.addEventListener('load', handleLoad);
+    img.onerror = () => {
+      if (cancelled) return;
+      console.error('Failed to load panorama image:', imageUrl);
+      setLoading(false);
+    };
+
+    img.src = imageUrl;
 
     return () => {
-      container.removeEventListener('load', handleLoad);
+      cancelled = true;
+      img.src = '';
       if (viewerRef.current) {
         viewerRef.current.destroy();
         viewerRef.current = null;
       }
     };
-  }, [imageUrl, hotspots]);
+  }, [imageUrl, hotspots, scriptLoaded]);
 
-  // Update hotspots when they change
   useEffect(() => {
-    if (viewerRef.current && hotspots.length > 0) {
+    const pannellum = window.pannellum;
+    if (viewerRef.current && hotspots.length > 0 && pannellum) {
       // Remove existing hotspots
       viewerRef.current.removeAllHotSpots();
       
