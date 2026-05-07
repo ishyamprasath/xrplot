@@ -139,8 +139,8 @@ export default function WorldManager({
                 }}
               >
                 <option value="">All Folders</option>
-                {folders.map(folder => (
-                  <option key={folder.id} value={folder.id}>{folder.name}</option>
+                {folders.map((folder, idx) => (
+                  <option key={folder._id || folder.id || `folder-${idx}`} value={folder._id || folder.id || ''}>{folder.name}</option>
                 ))}
               </select>
             </div>
@@ -186,9 +186,9 @@ export default function WorldManager({
 
             {/* Worlds List */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {filteredWorlds.map(world => (
+              {filteredWorlds.map((world, idx) => (
                 <div
-                  key={world.id}
+                  key={world._id || world.id || `world-${idx}`}
                   style={{
                     padding: '16px',
                     background: 'rgba(255,255,255,0.05)',
@@ -228,13 +228,15 @@ export default function WorldManager({
                   ) : (
                     <>
                       <div>
-                        <div style={{ fontWeight: 600, color: 'white', marginBottom: '4px' }}>{world.name}</div>
+                        <div style={{ fontWeight: 600, color: 'white', marginBottom: '4px' }}>
+                          {world.name.length > 30 ? `${world.name.substring(0, 27)}...` : world.name}
+                        </div>
                         <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                           {world.nodes?.length || 0} nodes • {world.edges?.length || 0} connections
                           {world.folderId && (
                             <span style={{ marginLeft: '8px' }}>
                               <FolderOpen size={12} style={{ display: 'inline', verticalAlign: 'middle' }} />
-                              {folders.find(f => f.id === world.folderId)?.name || 'Unknown Folder'}
+                              {folders.find(f => (f._id || f.id) === world.folderId)?.name || 'Unknown Folder'}
                             </span>
                           )}
                         </div>
@@ -305,11 +307,12 @@ export default function WorldManager({
 
             {/* Folders List */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {folders.map(folder => {
-                const worldCount = worlds.filter(world => world.folderId === folder.id).length;
+              {folders.map((folder, idx) => {
+                const folderId = folder._id || folder.id;
+                const worldCount = worlds.filter(world => (world.folderId === folderId)).length;
                 return (
                   <div
-                    key={folder.id}
+                    key={folderId || `folder-${idx}`}
                     style={{
                       padding: '16px',
                       background: 'rgba(255,255,255,0.05)',

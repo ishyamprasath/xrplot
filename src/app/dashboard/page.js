@@ -251,7 +251,9 @@ export default function DashboardPage() {
                 </div>
               )}
             </div>
-            <div className="world-card-name">{world.name}</div>
+            <div className="world-card-name" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {world.name.length > 28 ? `${world.name.substring(0, 25)}...` : world.name}
+                        </div>
             <div className="world-card-meta">
               <span><MapPin size={12} /> {world.nodes?.length || 0} spaces</span>
               <span><Link2 size={12} /> {world.edges?.length || 0} connections</span>
