@@ -2,36 +2,52 @@
 
 import { useUser, UserButton } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
-import { useState, useEffect, useCallback } from 'react';
-import { Globe, Plus, MapPin, Link2, Edit2, Trash2, Sparkles, Hexagon } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Globe, Plus, MapPin, Link2, Edit2, Trash2, Sparkles, Hexagon, Folder, History, MoreVertical, Copy, Move, ChevronRight, FolderPlus } from 'lucide-react';
 
 export default function DashboardPage() {
   const { user } = useUser();
   const router = useRouter();
   const [worlds, setWorlds] = useState([]);
+  const [folders, setFolders] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+  // Modals state
   const [showCreate, setShowCreate] = useState(false);
-  const [showDelete, setShowDelete] = useState(null);
+  const [showCreateFolder, setShowCreateFolder] = useState(null); // null or { parentId }
+  const [showDelete, setShowDelete] = useState(null); // { type: 'world'|'folder', id }
+  const [showMove, setShowMove] = useState(null); // { type: 'world'|'folder', id, currentParentId }
+  const [showCopy, setShowCopy] = useState(null); // { type: 'world'|'folder', id }
+  
   const [newWorldName, setNewWorldName] = useState('');
+  const [newFolderName, setNewFolderName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [activeMenu, setActiveMenu] = useState(null); // { type: 'world'|'folder', id }
 
-  const fetchWorlds = useCallback(async () => {
+  const fetchData = useCallback(async () => {
+    setLoading(true);
     try {
-      const res = await fetch('/api/worlds');
-      if (res.ok) {
-        const data = await res.json();
-        setWorlds(data);
-      }
+      const [worldsRes, foldersRes] = await Promise.all([
+        fetch('/api/worlds'),
+        fetch('/api/folders')
+      ]);
+      
+      if (worldsRes.ok) setWorlds(await worldsRes.json());
+      if (foldersRes.ok) setFolders(await foldersRes.json());
     } catch (err) {
-      console.error('Failed to fetch worlds:', err);
+      console.error('Failed to fetch data:', err);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchWorlds();
-  }, [fetchWorlds]);
+    fetchData();
+  }, [fetchData]);
+
+  const rootWorlds = useMemo(() => worlds.filter(w => !w.isPredictionWorld && !w.folderId), [worlds]);
+  const rootFolders = useMemo(() => folders.filter(f => !f.parentId), [folders]);
+  const predictionWorlds = useMemo(() => worlds.filter(w => w.isPredictionWorld), [worlds]);
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -54,7 +70,33 @@ export default function DashboardPage() {
     }
   };
 
-  const handleDelete = async (worldId) => {
+  const handleCreateFolder = async (e) => {
+    e.preventDefault();
+    if (!newFolderName.trim()) return;
+    setCreating(true);
+    try {
+      const res = await fetch('/api/folders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          name: newFolderName.trim(),
+          parentId: showCreateFolder?.parentId || null
+        }),
+      });
+      if (res.ok) {
+        const folder = await res.json();
+        setFolders(prev => [folder, ...prev]);
+        setShowCreateFolder(null);
+        setNewFolderName('');
+      }
+    } catch (err) {
+      console.error('Failed to create folder:', err);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleDeleteWorld = async (worldId) => {
     try {
       const res = await fetch(`/api/worlds/${worldId}`, { method: 'DELETE' });
       if (res.ok) {
@@ -66,9 +108,161 @@ export default function DashboardPage() {
     }
   };
 
+  const handleDeleteFolder = async (folderId) => {
+    try {
+      const res = await fetch(`/api/folders/${folderId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setFolders(prev => prev.filter(f => f._id !== folderId));
+        fetchData();
+        setShowDelete(null);
+      }
+    } catch (err) {
+      console.error('Failed to delete folder:', err);
+    }
+  };
+
+  const handleMoveWorld = async (worldId, targetFolderId) => {
+    try {
+      const res = await fetch(`/api/worlds/${worldId}/move`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folderId: targetFolderId }),
+      });
+      if (res.ok) {
+        const updatedWorld = await res.json();
+        setWorlds(prev => prev.map(w => w._id === worldId ? updatedWorld : w));
+        setShowMove(null);
+      }
+    } catch (err) {
+      console.error('Failed to move world:', err);
+    }
+  };
+
+  const handleCopyWorld = async (worldId, targetFolderId) => {
+    try {
+      const res = await fetch(`/api/worlds/${worldId}/copy`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folderId: targetFolderId }),
+      });
+      if (res.ok) {
+        const newWorld = await res.json();
+        setWorlds(prev => [newWorld, ...prev]);
+        setShowCopy(null);
+      }
+    } catch (err) {
+      console.error('Failed to copy world:', err);
+    }
+  };
+
+  const handleMoveFolder = async (folderId, targetParentId) => {
+    try {
+      const res = await fetch(`/api/folders/${folderId}/move`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetFolderId: targetParentId }),
+      });
+      if (res.ok) {
+        const updatedFolder = await res.json();
+        setFolders(prev => prev.map(f => f._id === folderId ? updatedFolder : f));
+        setShowMove(null);
+      }
+    } catch (err) {
+      console.error('Failed to move folder:', err);
+    }
+  };
+
+  const handleCopyFolder = async (folderId, targetParentId) => {
+    try {
+      const res = await fetch(`/api/folders/${folderId}/copy`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetFolderId: targetParentId }),
+      });
+      if (res.ok) {
+        const newFolder = await res.json();
+        setFolders(prev => [newFolder, ...prev]);
+        fetchData();
+        setShowCopy(null);
+      }
+    } catch (err) {
+      console.error('Failed to copy folder:', err);
+    }
+  };
+
   const formatDate = (dateStr) => {
     const date = new Date(dateStr);
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  const renderWorldGrid = (worldsToRender, emptyMessage) => {
+    if (worldsToRender.length === 0) {
+      return (
+        <div className="empty-state-mini" style={{ padding: '40px', textAlign: 'center', background: 'rgba(255,255,255,0.02)', borderRadius: '16px', border: '1px dashed rgba(255,255,255,0.1)' }}>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{emptyMessage}</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="worlds-grid">
+        {worldsToRender.map(world => (
+          <div
+            key={world._id}
+            className="card card-glow world-card"
+            onClick={() => router.push(`/worlds/${world._id}`)}
+          >
+            <div className="world-card-thumb" style={{ position: 'relative' }}>
+              {world.isPredictionWorld && (
+                <div style={{ position: 'absolute', top: 12, right: 12, background: 'var(--violet)', color: 'white', padding: '4px 10px', borderRadius: '6px', fontSize: '0.65rem', fontWeight: 800, letterSpacing: '1px', boxShadow: '0 2px 10px rgba(124, 58, 237, 0.4)', zIndex: 5 }}>
+                  PREDICTION
+                </div>
+              )}
+              {world.nodes?.some(n => n.panoramaUrl) ? (
+                <img
+                  src={world.nodes.find(n => n.panoramaUrl)?.panoramaUrl}
+                  alt={world.name}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+              ) : (
+                <Globe size={48} strokeWidth={1.5} />
+              )}
+              
+              <button 
+                className="card-menu-trigger"
+                onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu?.id === world._id ? null : { type: 'world', id: world._id }); }}
+                style={{ position: 'absolute', top: 12, left: 12, zIndex: 6, background: 'rgba(0,0,0,0.5)', border: 'none', color: 'white', padding: '4px', borderRadius: '4px', cursor: 'pointer' }}
+              >
+                <MoreVertical size={16} />
+              </button>
+              
+              {activeMenu?.type === 'world' && activeMenu?.id === world._id && (
+                <div className="card-menu-dropdown" onClick={e => e.stopPropagation()} style={{ position: 'absolute', top: 40, left: 12, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', borderRadius: '8px', zIndex: 10, padding: '8px', minWidth: '140px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}>
+                  <button onClick={() => { setShowMove({ type: 'world', id: world._id, currentParentId: world.folderId }); setActiveMenu(null); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px', background: 'none', border: 'none', color: 'white', textAlign: 'left', cursor: 'pointer', fontSize: '0.85rem' }}>
+                    <Move size={14} /> Move to...
+                  </button>
+                  <button onClick={() => { setShowCopy({ type: 'world', id: world._id }); setActiveMenu(null); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px', background: 'none', border: 'none', color: 'white', textAlign: 'left', cursor: 'pointer', fontSize: '0.85rem' }}>
+                    <Copy size={14} /> Copy to...
+                  </button>
+                  <div style={{ height: '1px', background: 'var(--border-subtle)', margin: '4px 0' }} />
+                  <button onClick={() => { setShowDelete({ type: 'world', id: world._id }); setActiveMenu(null); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px', background: 'none', border: 'none', color: 'var(--red-light)', textAlign: 'left', cursor: 'pointer', fontSize: '0.85rem' }}>
+                    <Trash2 size={14} /> Delete
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="world-card-name">{world.name}</div>
+            <div className="world-card-meta">
+              <span><MapPin size={12} /> {world.nodes?.length || 0} spaces</span>
+              <span><Link2 size={12} /> {world.edges?.length || 0} connections</span>
+            </div>
+            <div className="world-card-meta" style={{ marginTop: 4 }}>
+              <span>Updated {formatDate(world.updatedAt)}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
   };
 
   return (
@@ -88,14 +282,26 @@ export default function DashboardPage() {
       <div className="dashboard">
         <div className="dashboard-header">
           <div>
-            <h1>Your Worlds</h1>
+            <h1>Dashboard</h1>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '4px' }}>
-              Welcome back{user?.firstName ? `, ${user.firstName}` : ''}! Build immersive 360° experiences.
+              Welcome back{user?.firstName ? `, ${user.firstName}` : ''}! Manage your immersive worlds and predictions.
             </p>
           </div>
-          <button className="btn btn-primary btn-lg" onClick={() => setShowCreate(true)}>
-            <Plus size={18} /> Create New World
-          </button>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button
+              className="btn btn-secondary btn-lg"
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: 'white', color: 'black', border: '1px solid #ddd' }}
+              onClick={() => router.push('/prediction')}
+            >
+              <Globe size={18} /> Decade 2.0
+            </button>
+            <button className="btn btn-ghost btn-lg" onClick={() => setShowCreateFolder({ parentId: null })} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <FolderPlus size={18} /> New Folder
+            </button>
+            <button className="btn btn-primary btn-lg" onClick={() => setShowCreate(true)}>
+              <Plus size={18} /> Create New World
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -108,61 +314,93 @@ export default function DashboardPage() {
               </div>
             ))}
           </div>
-        ) : worlds.length === 0 ? (
+        ) : worlds.length === 0 && folders.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-icon">
               <Globe size={64} strokeWidth={1.5} />
             </div>
-            <h2>No worlds yet</h2>
-            <p>Create your first 360° world and start building immersive experiences from your photos.</p>
-            <button className="btn btn-primary btn-lg" onClick={() => setShowCreate(true)}>
-              <Plus size={18} /> Create Your First World
-            </button>
+            <h2>Start Your Journey</h2>
+            <p>Create your first 360° world, organize them into folders, or use Decade 2.0 to predict the future.</p>
+            <div style={{ display: 'flex', gap: '16px', marginTop: '24px' }}>
+              <button className="btn btn-secondary btn-lg" onClick={() => router.push('/prediction')}><Globe size={18} /> Decade 2.0</button>
+              <button className="btn btn-ghost btn-lg" onClick={() => setShowCreateFolder({ parentId: null })}><FolderPlus size={18} /> New Folder</button>
+              <button className="btn btn-primary btn-lg" onClick={() => setShowCreate(true)}><Plus size={18} /> Create Your First World</button>
+            </div>
           </div>
         ) : (
-          <div className="worlds-grid">
-            {worlds.map(world => (
-              <div
-                key={world._id}
-                className="card card-glow world-card"
-                onClick={() => router.push(`/worlds/${world._id}`)}
-              >
-                <div className="world-card-thumb">
-                  {world.nodes?.some(n => n.panoramaUrl) ? (
-                    <img
-                      src={world.nodes.find(n => n.panoramaUrl)?.panoramaUrl}
-                      alt={world.name}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
-                  ) : (
-                    <Globe size={48} strokeWidth={1.5} />
-                  )}
-                </div>
-                <div className="world-card-name">{world.name}</div>
-                <div className="world-card-meta">
-                  <span><MapPin size={12} /> {world.nodes?.length || 0} spaces</span>
-                  <span><Link2 size={12} /> {world.edges?.length || 0} connections</span>
-                </div>
-                <div className="world-card-meta" style={{ marginTop: 4 }}>
-                  <span>Updated {formatDate(world.updatedAt)}</span>
-                </div>
-                <div className="world-card-actions" onClick={e => e.stopPropagation()}>
-                  <button
-                    className="btn btn-secondary"
-                    style={{ flex: 1 }}
-                    onClick={() => router.push(`/worlds/${world._id}`)}
-                  >
-                    <Edit2 size={14} /> Edit
-                  </button>
-                  <button
-                    className="btn btn-danger"
-                    onClick={() => setShowDelete(world._id)}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '48px' }}>
+            {/* Folders Section */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px' }}>
+                <Folder size={20} className="text-violet" />
+                <h2 style={{ fontSize: '1.4rem', fontWeight: 700, margin: 0 }}>Folders</h2>
               </div>
-            ))}
+              
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '20px' }}>
+                {rootFolders.map(folder => (
+                  <div 
+                    key={folder._id} 
+                    className="card folder-card"
+                    onClick={() => router.push(`/dashboard/folders/${folder._id}`)}
+                    style={{ cursor: 'pointer', position: 'relative', display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px' }}
+                  >
+                    <Folder size={24} style={{ color: 'var(--violet)' }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: '0.95rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{folder.name}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                        {worlds.filter(w => w.folderId === folder._id).length} worlds, {folders.filter(f => f.parentId === folder._id).length} folders
+                      </div>
+                    </div>
+                    
+                    <button 
+                      className="card-menu-trigger"
+                      onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu?.id === folder._id ? null : { type: 'folder', id: folder._id }); }}
+                      style={{ background: 'none', border: 'none', color: 'var(--text-muted)', padding: '4px', cursor: 'pointer' }}
+                    >
+                      <MoreVertical size={16} />
+                    </button>
+                    
+                    {activeMenu?.type === 'folder' && activeMenu?.id === folder._id && (
+                      <div className="card-menu-dropdown" onClick={e => e.stopPropagation()} style={{ position: 'absolute', top: '100%', right: 0, marginTop: '8px', background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', borderRadius: '8px', zIndex: 10, padding: '8px', minWidth: '140px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}>
+                        <button onClick={() => { setShowMove({ type: 'folder', id: folder._id, currentParentId: folder.parentId }); setActiveMenu(null); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px', background: 'none', border: 'none', color: 'white', textAlign: 'left', cursor: 'pointer', fontSize: '0.85rem' }}>
+                          <Move size={14} /> Move to...
+                        </button>
+                        <button onClick={() => { setShowCopy({ type: 'folder', id: folder._id }); setActiveMenu(null); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px', background: 'none', border: 'none', color: 'white', textAlign: 'left', cursor: 'pointer', fontSize: '0.85rem' }}>
+                          <Copy size={14} /> Copy to...
+                        </button>
+                        <div style={{ height: '1px', background: 'var(--border-subtle)', margin: '4px 0' }} />
+                        <button onClick={() => { setShowDelete({ type: 'folder', id: folder._id }); setActiveMenu(null); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px', background: 'none', border: 'none', color: 'var(--red-light)', textAlign: 'left', cursor: 'pointer', fontSize: '0.85rem' }}>
+                          <Trash2 size={14} /> Delete
+                        </button>
+                      </div>
+                    )}
+                    
+                    <ChevronRight size={16} style={{ color: 'var(--text-muted)' }} />
+                  </div>
+                ))}
+                {rootFolders.length === 0 && (
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', fontStyle: 'italic' }}>No folders created yet. Organize your worlds by creating folders.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Standard Worlds Section */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px' }}>
+                <Globe size={20} className="text-violet" />
+                <h2 style={{ fontSize: '1.4rem', fontWeight: 700, margin: 0 }}>Your Worlds</h2>
+              </div>
+              {renderWorldGrid(rootWorlds, "No worlds at the root. Use folders to stay organized or create a new world.")}
+            </div>
+
+            {/* Predictions Section */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px' }}>
+                <History size={20} className="text-cyan" />
+                <h2 style={{ fontSize: '1.4rem', fontWeight: 700, margin: 0 }}>Decade 2.0 Predictions</h2>
+              </div>
+              {renderWorldGrid(predictionWorlds, "No predictions generated yet. Use the 'Decade 2.0' button to build future worlds.")}
+            </div>
           </div>
         )}
       </div>
@@ -188,14 +426,98 @@ export default function DashboardPage() {
                 />
               </div>
               <div className="modal-actions">
-                <button type="button" className="btn btn-ghost" onClick={() => setShowCreate(false)}>
-                  Cancel
-                </button>
+                <button type="button" className="btn btn-ghost" onClick={() => setShowCreate(false)}>Cancel</button>
                 <button type="submit" className="btn btn-primary" disabled={creating || !newWorldName.trim()}>
-                  {creating ? <><span className="spinner" style={{ width: 16, height: 16 }} /> Creating...</> : <><Plus size={16} /> Create World</>}
+                  {creating ? 'Creating...' : 'Create World'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Create Folder Modal */}
+      {showCreateFolder && (
+        <div className="modal-overlay" onClick={() => setShowCreateFolder(null)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2><FolderPlus size={20} /> New Folder</h2>
+              <button className="modal-close" onClick={() => setShowCreateFolder(null)}>×</button>
+            </div>
+            <form onSubmit={handleCreateFolder} className="create-world-form">
+              <div className="form-group">
+                <label>Folder Name</label>
+                <input
+                  className="input"
+                  placeholder="Projects, Client A, Personal..."
+                  value={newFolderName}
+                  onChange={e => setNewFolderName(e.target.value)}
+                  autoFocus
+                  required
+                />
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="btn btn-ghost" onClick={() => setShowCreateFolder(null)}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={creating || !newFolderName.trim()}>
+                  {creating ? 'Creating...' : 'Create Folder'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Move/Copy Selection Modal */}
+      {(showMove || showCopy) && (
+        <div className="modal-overlay" onClick={() => { setShowMove(null); setShowCopy(null); }}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 400 }}>
+            <div className="modal-header">
+              <h2>
+                {(showMove || showCopy).type === 'world' ? (showMove ? <Move size={20} /> : <Copy size={20} />) : <Folder size={20} />} 
+                {showMove ? ' Move' : ' Copy'} to Folder
+              </h2>
+              <button className="modal-close" onClick={() => { setShowMove(null); setShowCopy(null); }}>×</button>
+            </div>
+            <div style={{ padding: '20px 0' }}>
+              <p style={{ color: 'var(--text-secondary)', marginBottom: '16px' }}>Select target folder:</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '300px', overflowY: 'auto' }}>
+                <button 
+                  onClick={() => {
+                    const item = showMove || showCopy;
+                    if (showMove) {
+                      item.type === 'world' ? handleMoveWorld(item.id, null) : handleMoveFolder(item.id, null);
+                    } else {
+                      item.type === 'world' ? handleCopyWorld(item.id, null) : handleCopyFolder(item.id, null);
+                    }
+                  }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'white', textAlign: 'left', cursor: 'pointer' }}
+                >
+                  <Globe size={18} /> Root (No Folder)
+                </button>
+                {folders
+                  .filter(f => {
+                    const item = showMove || showCopy;
+                    // Prevent moving folder into itself
+                    return !(item.type === 'folder' && item.id === f._id);
+                  })
+                  .map(folder => (
+                  <button 
+                    key={folder._id}
+                    onClick={() => {
+                      const item = showMove || showCopy;
+                      if (showMove) {
+                        item.type === 'world' ? handleMoveWorld(item.id, folder._id) : handleMoveFolder(item.id, folder._id);
+                      } else {
+                        item.type === 'world' ? handleCopyWorld(item.id, folder._id) : handleCopyFolder(item.id, folder._id);
+                      }
+                    }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'white', textAlign: 'left', cursor: 'pointer' }}
+                  >
+                    <Folder size={18} style={{ color: 'var(--violet)' }} /> {folder.name}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -205,11 +527,20 @@ export default function DashboardPage() {
         <div className="modal-overlay" onClick={() => setShowDelete(null)}>
           <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 400 }}>
             <div className="confirm-dialog">
-              <h2 style={{ marginBottom: 'var(--space-md)' }}><Trash2 size={24} style={{ color: 'var(--red-light)' }} /> Delete World?</h2>
-              <p>This will permanently delete this world and all its images. This action cannot be undone.</p>
+              <h2 style={{ marginBottom: 'var(--space-md)' }}>
+                <Trash2 size={24} style={{ color: 'var(--red-light)' }} /> 
+                Delete {showDelete.type === 'world' ? 'World' : 'Folder'}?
+              </h2>
+              <p>
+                {showDelete.type === 'world' 
+                  ? 'This will permanently delete this world and all its images. This action cannot be undone.'
+                  : 'This will delete the folder. Items inside will be moved to the parent folder or root.'}
+              </p>
               <div className="modal-actions">
                 <button className="btn btn-ghost" onClick={() => setShowDelete(null)}>Cancel</button>
-                <button className="btn btn-danger" onClick={() => handleDelete(showDelete)}>Delete Forever</button>
+                <button className="btn btn-danger" onClick={() => showDelete.type === 'world' ? handleDeleteWorld(showDelete.id) : handleDeleteFolder(showDelete.id)}>
+                  Delete {showDelete.type === 'world' ? 'Forever' : 'Folder'}
+                </button>
               </div>
             </div>
           </div>

@@ -9,7 +9,7 @@ const nextConfig = {
       },
     ],
   },
-  serverExternalPackages: ['sharp'],
+  serverExternalPackages: ['sharp', '@google/earthengine', 'mongoose'],
   experimental: {
     proxyClientMaxBodySize: 52428800,
     serverActions: {

@@ -8,6 +8,13 @@ const ImageSchema = new mongoose.Schema({
   originalPublicId: { type: String, default: '' },
 });
 
+const WorkflowSchema = new mongoose.Schema({
+  id: { type: String, required: true },
+  name: { type: String, required: true, default: 'New Workflow' },
+  steps: { type: mongoose.Schema.Types.Mixed, default: [] },
+  status: { type: String, default: 'draft' },
+});
+
 const NodeSchema = new mongoose.Schema({
   id: { type: String, required: true },
   label: { type: String, default: 'New Space' },
@@ -25,6 +32,18 @@ const NodeSchema = new mongoose.Schema({
     enum: ['empty', 'uploaded', 'analyzing', 'stitching', 'ready', 'error'],
     default: 'empty',
   },
+  workflows: [WorkflowSchema],
+  isCentralNode: { type: Boolean, default: false },
+  // Decade 2.0 — Predictive Intelligence Fields
+  latitude: { type: Number, default: null },
+  longitude: { type: Number, default: null },
+  predictionYear: { type: Number, default: null },
+  urbanDensity: { type: Number, default: null, min: 0, max: 100 },
+  predictionConfidence: { type: Number, default: null, min: 0, max: 1 },
+  isPredictionNode: { type: Boolean, default: false },
+  predictionType: { type: String, default: '' },
+  geojsonHotspots: { type: mongoose.Schema.Types.Mixed, default: null },
+  ndbiTrend: { type: [Number], default: [] },
 });
 
 const EdgeSchema = new mongoose.Schema({
@@ -44,6 +63,8 @@ const WorldSchema = new mongoose.Schema({
   userId: { type: String, required: true, index: true },
   name: { type: String, required: true, default: 'Untitled World' },
   description: { type: String, default: '' },
+  isPredictionWorld: { type: Boolean, default: false },
+  folderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Folder', default: null },
   nodes: [NodeSchema],
   edges: [EdgeSchema],
 }, {

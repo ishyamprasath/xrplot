@@ -77,15 +77,42 @@ export async function POST(request, { params }) {
         }
       }
 
-      // 3. Ensure proper dimensions and format using Sharp
+      // 3. Ensure proper dimensions and format using Sharp with compression
       const finalBuffer = await sharp(panoramaBuffer)
         .resize(4096, 2048, { fit: 'cover' })
-        .jpeg({ quality: 90 })
-        .toBuffer();
+        .jpeg({ 
+          quality: 85,
+          progressive: true,
+          mozjpeg: true,
+          trellisQuantisation: true
+        })
+        .toBuffer({ resolveWithObject: true });
+
+      // 3.1. Check file size and compress further if needed
+      let compressedBuffer = finalBuffer.data;
+      const fileSizeMB = finalBuffer.info.size / (1024 * 1024);
+      
+      if (fileSizeMB > 4.0) { // Leave margin under 4.5MB limit
+        console.log(`Panorama size: ${fileSizeMB.toFixed(2)}MB, compressing further...`);
+        
+        // Apply aggressive compression for large files
+        compressedBuffer = await sharp(panoramaBuffer)
+          .resize(4096, 2048, { fit: 'cover' })
+          .jpeg({ 
+            quality: 70,
+            progressive: true,
+            mozjpeg: true,
+            trellisQuantisation: true
+          })
+          .toBuffer({ resolveWithObject: true });
+        
+        const compressedSizeMB = compressedBuffer.info.size / (1024 * 1024);
+        console.log(`Compressed panorama size: ${compressedSizeMB.toFixed(2)}MB`);
+      }
 
       // 4. Upload finished masterpiece to Cloudinary
       const uploadResult = await uploadImage(
-        finalBuffer,
+        compressedBuffer || finalBuffer.data,
         `xrplot/${worldId}/panoramas`
       );
 

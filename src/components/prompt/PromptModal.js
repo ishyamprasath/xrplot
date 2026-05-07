@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { Wand2, Paperclip, Undo2, RefreshCw, Pencil, X, Loader2, Image as ImageIcon, Sparkles, ChevronRight } from 'lucide-react';
+import { compressImage } from '@/utils/imageCompression';
 
 export default function PromptModal({ worldId, nodeData, onClose, onComplete }) {
   const [globalPrompt, setGlobalPrompt] = useState('');
@@ -57,7 +58,10 @@ export default function PromptModal({ worldId, nodeData, onClose, onComplete }) 
       formData.append('prompt', promptText);
       formData.append('targetImageUrl', targetUrl);
       formData.append('targetImageIndex', targetIndex);
-      if (refImg?.file) formData.append('referenceImage', refImg.file);
+      if (refImg?.file) {
+        const compressedRef = await compressImage(refImg.file);
+        formData.append('referenceImage', compressedRef);
+      }
 
       const res = await fetch(`/api/worlds/${worldId}/nodes/${nodeData.nodeId}/prompt`, {
         method: 'POST',
@@ -65,8 +69,16 @@ export default function PromptModal({ worldId, nodeData, onClose, onComplete }) 
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to generate image');
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const data = await res.json();
+          throw new Error(data.error || 'Failed to generate image');
+        } else {
+          if (res.status === 413) {
+            throw new Error('Reference image is too large for deployment limits.');
+          }
+          throw new Error('Failed to generate image, status: ' + res.status);
+        }
       }
 
       await onComplete();

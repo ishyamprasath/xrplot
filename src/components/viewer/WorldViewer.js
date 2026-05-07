@@ -9,38 +9,45 @@ export default function WorldViewer({ world, onExit }) {
   const readyNodes = (world.nodes || []).filter(n => n.panoramaUrl && n.status === 'ready');
   const [currentNodeId, setCurrentNodeId] = useState(readyNodes[0]?.id || null);
   const [history, setHistory] = useState(readyNodes[0]?.id ? [readyNodes[0].id] : []);
+  const [showNextChoices, setShowNextChoices] = useState(false);
+  const [showPrevChoices, setShowPrevChoices] = useState(false);
 
   const currentNode = world.nodes?.find(n => n.id === currentNodeId);
 
-  // Find connected nodes
+  // Find connected nodes - treat all edges as bidirectional for navigation
   const getConnectedNodes = useCallback(() => {
-    if (!currentNodeId) return { prev: null, next: [] };
+    if (!currentNodeId) return { prev: [], next: [] };
 
-    const previousNodeId = history.length > 1 ? history[history.length - 2] : null;
-    let prevNode = null;
-    const nextNodes = [];
+    const connectedNodes = [];
+    const nodeIds = new Set();
 
-    (world.edges || [])
-      .filter(e => e.source === currentNodeId || e.target === currentNodeId)
-      .forEach(e => {
-        const targetId = e.source === currentNodeId ? e.target : e.source;
-        const targetNode = world.nodes?.find(n => n.id === targetId);
-        if (!targetNode?.panoramaUrl) return;
-
-        if (targetNode.id === previousNodeId) {
-          prevNode = targetNode;
-        } else {
-          nextNodes.push(targetNode);
+    (world.edges || []).forEach(e => {
+      let connectedNodeId = null;
+      if (e.source === currentNodeId) {
+        connectedNodeId = e.target;
+      } else if (e.target === currentNodeId) {
+        connectedNodeId = e.source;
+      }
+      
+      if (connectedNodeId && !nodeIds.has(connectedNodeId)) {
+        const node = world.nodes?.find(n => n.id === connectedNodeId);
+        if (node?.panoramaUrl) {
+          connectedNodes.push(node);
+          nodeIds.add(connectedNodeId);
         }
-      });
+      }
+    });
 
-    return { prev: prevNode, next: nextNodes };
-  }, [currentNodeId, history, world]);
+    // Put all connections in both prev and next for bidirectional behavior
+    return { prev: connectedNodes, next: connectedNodes };
+  }, [currentNodeId, world]);
 
   const { prev, next } = getConnectedNodes();
 
   const navigateTo = useCallback((nodeId) => {
     setCurrentNodeId(nodeId);
+    setShowNextChoices(false);
+    setShowPrevChoices(false);
     setHistory(prev => {
       if (prev.length > 1 && prev[prev.length - 2] === nodeId) {
         return prev.slice(0, -1);
@@ -102,39 +109,66 @@ export default function WorldViewer({ world, onExit }) {
         📍 {currentNode?.label}
       </div>
 
-      {/* Previous node button - bottom left */}
-      {prev && (
-        <button
-          onClick={() => navigateTo(prev.id)}
-          style={{
-            position: 'absolute', bottom: 24, left: 24, zIndex: 30,
-            background: '#ffffff', color: '#000000',
-            border: '2px solid #000000', borderRadius: 10,
-            padding: '12px 22px', cursor: 'pointer',
-            fontWeight: 700, fontSize: '0.9rem',
-            display: 'flex', alignItems: 'center', gap: 8,
-            boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
-            transition: 'transform 0.15s ease',
-          }}
-          onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
-          onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M19 12H5" /><path d="m12 19-7-7 7-7" />
-          </svg>
-          Prev: {prev.label}
-        </button>
+      {/* Previous choices popup - bottom left, above the button */}
+      {showPrevChoices && prev.length > 1 && (
+        <div style={{
+          position: 'absolute', bottom: 88, left: 24, zIndex: 31,
+          background: '#ffffff', border: '2px solid #000000', borderRadius: 12,
+          padding: '16px', boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+          display: 'flex', flexDirection: 'column', gap: 12,
+          maxWidth: 320, minWidth: 220,
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontWeight: 700, fontSize: '0.85rem' }}>Choose Previous</span>
+            <button
+              onClick={() => setShowPrevChoices(false)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+              </svg>
+            </button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {prev.map(n => (
+              <button
+                key={n.id}
+                onClick={() => navigateTo(n.id)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  background: '#f5f5f5', border: '1.5px solid #000000', borderRadius: 8,
+                  padding: '8px 10px', cursor: 'pointer', textAlign: 'left',
+                  transition: 'background 0.15s ease, transform 0.15s ease',
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = '#e8e8e8';
+                  e.currentTarget.style.transform = 'scale(1.02)';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = '#f5f5f5';
+                  e.currentTarget.style.transform = 'scale(1)';
+                }}
+              >
+                <img
+                  src={n.panoramaUrl}
+                  alt={n.label}
+                  style={{ width: 48, height: 32, borderRadius: 4, objectFit: 'cover', border: '1px solid #ccc', flexShrink: 0 }}
+                />
+                <span style={{ fontWeight: 600, fontSize: '0.85rem', color: '#000' }}>{n.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
       )}
 
-      {/* Next node button(s) - bottom right */}
+      {/* Previous node button - bottom left */}
       <div style={{
-        position: 'absolute', bottom: 24, right: 24, zIndex: 30,
-        display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end',
+        position: 'absolute', bottom: 24, left: 24, zIndex: 30,
+        display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start',
       }}>
-        {next.map(n => (
+        {prev.length === 1 && (
           <button
-            key={n.id}
-            onClick={() => navigateTo(n.id)}
+            onClick={() => navigateTo(prev[0].id)}
             style={{
               background: '#ffffff', color: '#000000',
               border: '2px solid #000000', borderRadius: 10,
@@ -147,12 +181,134 @@ export default function WorldViewer({ world, onExit }) {
             onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
             onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
           >
-            Next: {n.label}
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5" /><path d="m12 19-7-7 7-7" />
+            </svg>
+            Prev: {prev[0].label}
+          </button>
+        )}
+        {prev.length > 1 && (
+          <button
+            onClick={() => setShowPrevChoices(true)}
+            style={{
+              background: '#ffffff', color: '#000000',
+              border: '2px solid #000000', borderRadius: 10,
+              padding: '12px 22px', cursor: 'pointer',
+              fontWeight: 700, fontSize: '0.9rem',
+              display: 'flex', alignItems: 'center', gap: 8,
+              boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+              transition: 'transform 0.15s ease',
+            }}
+            onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
+            onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5" /><path d="m12 19-7-7 7-7" />
+            </svg>
+            Explore Previous
+          </button>
+        )}
+      </div>
+
+      {/* Next choices popup - bottom right, above the button */}
+      {showNextChoices && next.length > 1 && (
+        <div style={{
+          position: 'absolute', bottom: 88, right: 24, zIndex: 31,
+          background: '#ffffff', border: '2px solid #000000', borderRadius: 12,
+          padding: '16px', boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+          display: 'flex', flexDirection: 'column', gap: 12,
+          maxWidth: 320, minWidth: 220,
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontWeight: 700, fontSize: '0.85rem' }}>Choose Destination</span>
+            <button
+              onClick={() => setShowNextChoices(false)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+              </svg>
+            </button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {next.map(n => (
+              <button
+                key={n.id}
+                onClick={() => navigateTo(n.id)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  background: '#f5f5f5', border: '1.5px solid #000000', borderRadius: 8,
+                  padding: '8px 10px', cursor: 'pointer', textAlign: 'left',
+                  transition: 'background 0.15s ease, transform 0.15s ease',
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = '#e8e8e8';
+                  e.currentTarget.style.transform = 'scale(1.02)';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = '#f5f5f5';
+                  e.currentTarget.style.transform = 'scale(1)';
+                }}
+              >
+                <img
+                  src={n.panoramaUrl}
+                  alt={n.label}
+                  style={{ width: 48, height: 32, borderRadius: 4, objectFit: 'cover', border: '1px solid #ccc', flexShrink: 0 }}
+                />
+                <span style={{ fontWeight: 600, fontSize: '0.85rem', color: '#000' }}>{n.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Next node button - bottom right */}
+      <div style={{
+        position: 'absolute', bottom: 24, right: 24, zIndex: 30,
+        display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end',
+      }}>
+        {next.length === 1 && (
+          <button
+            onClick={() => navigateTo(next[0].id)}
+            style={{
+              background: '#ffffff', color: '#000000',
+              border: '2px solid #000000', borderRadius: 10,
+              padding: '12px 22px', cursor: 'pointer',
+              fontWeight: 700, fontSize: '0.9rem',
+              display: 'flex', alignItems: 'center', gap: 8,
+              boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+              transition: 'transform 0.15s ease',
+            }}
+            onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
+            onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+          >
+            Next: {next[0].label}
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M5 12h14" /><path d="m12 5 7 7-7 7" />
             </svg>
           </button>
-        ))}
+        )}
+        {next.length > 1 && (
+          <button
+            onClick={() => setShowNextChoices(true)}
+            style={{
+              background: '#ffffff', color: '#000000',
+              border: '2px solid #000000', borderRadius: 10,
+              padding: '12px 22px', cursor: 'pointer',
+              fontWeight: 700, fontSize: '0.9rem',
+              display: 'flex', alignItems: 'center', gap: 8,
+              boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+              transition: 'transform 0.15s ease',
+            }}
+            onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
+            onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+          >
+            Explore Choices
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 12h14" /><path d="m12 5 7 7-7 7" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Minimap */}
@@ -163,7 +319,7 @@ export default function WorldViewer({ world, onExit }) {
       }}>
         <p style={{ fontSize: '0.7rem', color: '#666', marginBottom: 4, fontWeight: 600 }}>World Map</p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-          {readyNodes.map(n => (
+          {[...new Set([...prev, ...next, currentNode])].filter(Boolean).map(n => (
             <button
               key={n.id}
               onClick={() => navigateTo(n.id)}

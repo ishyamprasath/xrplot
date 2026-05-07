@@ -21,6 +21,13 @@ export default function RootLayout({ children }) {
           borderRadius: '12px',
         },
       }}
+      signInForceRedirectUrl={true}
+      signUpForceRedirectUrl={true}
+      afterSignInUrl="/dashboard"
+      afterSignUpUrl="/dashboard"
+      // Force consistent authentication methods
+      signInMode="modal"
+      signUpMode="modal"
     >
       <html lang="en">
         <body>{children}</body>

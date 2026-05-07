@@ -29,6 +29,8 @@ yarn-error.log*
 .env*.local
 .env
 .env.production
+service-account-key.json*
+service-account-key.json
 add_env_vars.ps1
 
 # vercel
