@@ -1,19 +1,20 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, MessageSquare, Send, Trash2, Bot, User, Upload, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import ChatUploadModal from '@/components/ChatUploadModal';
 import PromptModal from '@/components/prompt/PromptModal';
 
-export default function ChatPage() {
+function ChatContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialChatId = searchParams.get('id');
 
   const [chats, setChats] = useState([]);
   const [activeChatId, setActiveChatId] = useState(initialChatId || null);
+// ... rest of the state and functions ...
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -357,5 +358,17 @@ export default function ChatPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense fallback={
+      <div className="chat-layout" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="spinner" style={{ width: 40, height: 40 }} />
+      </div>
+    }>
+      <ChatContent />
+    </Suspense>
   );
 }

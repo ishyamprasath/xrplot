@@ -4,7 +4,7 @@ import { useUser, UserButton, useClerk } from '@clerk/nextjs';
 import { useRouter, usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { 
-  Globe, Folder, Settings, LogOut, MessageSquare, 
+  Globe, Folder, LogOut, MessageSquare, 
   Moon, Sun, ChevronDown, ChevronRight, Hexagon,
   History, Sparkles
 } from 'lucide-react';
@@ -22,6 +22,13 @@ export default function Sidebar() {
   const [expandedFolders, setExpandedFolders] = useState({});
   const [theme, setTheme] = useState('dark');
   const [signingOut, setSigningOut] = useState(false);
+
+  useEffect(() => {
+    // Load theme from localStorage on mount
+    const savedTheme = localStorage.getItem('xrplot-theme') || 'dark';
+    setTheme(savedTheme);
+    document.documentElement.setAttribute('data-theme', savedTheme);
+  }, []);
 
   useEffect(() => {
     // Only fetch if authenticated
@@ -56,8 +63,8 @@ export default function Sidebar() {
   const toggleTheme = () => {
     const newTheme = theme === 'dark' ? 'light' : 'dark';
     setTheme(newTheme);
-    // document.documentElement.setAttribute('data-theme', newTheme);
-    // Not actually implemented yet, just visual button
+    localStorage.setItem('xrplot-theme', newTheme);
+    document.documentElement.setAttribute('data-theme', newTheme);
   };
 
   const rootFolders = folders.filter(f => !f.parentId);
@@ -165,9 +172,6 @@ export default function Sidebar() {
         <div className="sidebar-actions">
           <button className="icon-btn" onClick={toggleTheme} title="Toggle Theme">
             {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
-          <button className="icon-btn" title="Settings">
-            <Settings size={18} />
           </button>
           <button className="icon-btn" onClick={async () => { setSigningOut(true); try { await signOut({ redirectUrl: '/sign-in' }); } catch { router.push('/sign-in'); } }} title="Sign Out">
             <LogOut size={18} />
