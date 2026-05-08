@@ -91,7 +91,7 @@ function PredictionInner() {
   return (
     <div style={{ display: 'flex', width: '100%', height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
       {/* Sidebar Controls */}
-      <div style={{ width: '400px', height: '100%', backgroundColor: 'var(--bg-secondary)', borderRight: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', padding: '24px', zIndex: 10, boxShadow: '4px 0 24px rgba(0,0,0,0.5)', overflowY: 'auto' }}>
+      <div style={{ width: '400px', height: '100%', backgroundColor: 'var(--bg-secondary)', borderRight: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', padding: '24px', zIndex: 10, boxShadow: 'var(--shadow-lg)', overflowY: 'auto' }}>
         <button onClick={() => router.back()} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', marginBottom: '32px', padding: 0 }}>
           <ArrowLeft size={16} /> Back to Editor
         </button>
@@ -130,8 +130,8 @@ function PredictionInner() {
 
         {predictionData && (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ padding: '16px', backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: 'var(--radius-md)' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#10b981', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ padding: '16px', backgroundColor: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.25)', borderRadius: 'var(--radius-md)' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: 'var(--green)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Activity size={18} /> Prediction Complete
               </h3>
               <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Growth Confidence: {(predictionData.confidence * 100).toFixed(1)}%</p>
@@ -157,13 +157,13 @@ function PredictionInner() {
             <div style={{ padding: '16px', backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)' }}>
               <h4 style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--text-primary)', marginBottom: '8px' }}>Predicted World Created</h4>
               <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                Successfully generated a new predicted world with <strong style={{ color: 'white' }}>{predictionData.nodesAdded} immersive nodes</strong> representing the futuristic streets, hospitals, and infrastructure of {placeName}.
+                Successfully generated a new predicted world with <strong style={{ color: 'var(--text-primary)' }}>{predictionData.nodesAdded} immersive nodes</strong> representing the futuristic streets, hospitals, and infrastructure of {placeName}.
               </p>
             </div>
             
             <button
               onClick={() => predictionData.predictedWorldId ? router.push(`/worlds/${predictionData.predictedWorldId}`) : router.back()}
-              style={{ width: '100%', padding: '14px', backgroundColor: 'white', color: 'black', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 'bold', cursor: 'pointer', marginTop: '8px' }}
+              style={{ width: '100%', padding: '14px', backgroundColor: 'var(--violet)', color: '#fff', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 'bold', cursor: 'pointer', marginTop: '8px' }}
             >
               Open Predicted World
             </button>
@@ -174,7 +174,7 @@ function PredictionInner() {
           <button
             onClick={handleGenerate}
             disabled={!pin || loading}
-            style={{ width: '100%', padding: '14px', backgroundColor: (!pin || loading) ? 'var(--bg-primary)' : 'white', color: (!pin || loading) ? 'var(--text-muted)' : 'black', border: `1px solid ${(!pin || loading) ? 'var(--border-subtle)' : 'black'}`, borderRadius: 'var(--radius-md)', fontWeight: 'bold', cursor: (!pin || loading) ? 'not-allowed' : 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '24px' }}
+            style={{ width: '100%', padding: '14px', backgroundColor: (!pin || loading) ? 'var(--bg-primary)' : 'var(--violet)', color: (!pin || loading) ? 'var(--text-muted)' : '#fff', border: `1px solid ${(!pin || loading) ? 'var(--border-subtle)' : 'var(--violet)'}`, borderRadius: 'var(--radius-md)', fontWeight: 'bold', cursor: (!pin || loading) ? 'not-allowed' : 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '24px' }}
           >
             {loading ? <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Processing GEE Neural Nets...</> : "Generate 2036 Future World"}
           </button>
@@ -193,7 +193,7 @@ function PredictionInner() {
             )}
           </GoogleMap>
         ) : (
-           <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#000' }}>
+           <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-primary)' }}>
              <Loader2 size={32} style={{ animation: 'spin 1s linear infinite', color: 'var(--text-muted)' }} />
            </div>
         )}

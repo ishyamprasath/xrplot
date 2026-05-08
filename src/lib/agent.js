@@ -6,6 +6,46 @@ import Folder from '@/models/Folder';
 const apiKey = process.env.GEMINI_API_KEY;
 const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
+// In-memory idempotency store for prediction requests (prevents duplicate worlds)
+// Key: userId + location, Value: { timestamp, worldId, status }
+const predictionRequestStore = new Map();
+const PREDICTION_COOLDOWN_MS = 60000; // 60 second cooldown to prevent duplicates
+
+function getPredictionKey(userId, location) {
+  const normalizedLocation = (location || '').toLowerCase().trim().replace(/\s+/g, ' ');
+  return `${userId}:${normalizedLocation}`;
+}
+
+function isDuplicatePrediction(userId, location) {
+  const key = getPredictionKey(userId, location);
+  const existing = predictionRequestStore.get(key);
+  if (!existing) return false;
+  
+  const now = Date.now();
+  if (now - existing.timestamp > PREDICTION_COOLDOWN_MS) {
+    // Expired, clean up
+    predictionRequestStore.delete(key);
+    return false;
+  }
+  
+  return true; // Still within cooldown period
+}
+
+function recordPredictionRequest(userId, location, worldId = null, status = 'pending') {
+  const key = getPredictionKey(userId, location);
+  predictionRequestStore.set(key, {
+    timestamp: Date.now(),
+    worldId,
+    status,
+    location
+  });
+}
+
+function getRecentPrediction(userId, location) {
+  const key = getPredictionKey(userId, location);
+  return predictionRequestStore.get(key);
+}
+
 const MODEL_NAME = 'gemini-3-flash-preview';
 
 function getBaseUrl() {
@@ -31,11 +71,13 @@ async function createWorld({ userId, name, description = '' }) {
   };
 }
 
-async function updateWorld({ userId, worldId, name, description }) {
+async function updateWorld({ userId, worldId, name, description, folderId }) {
   await connectDB();
   const update = {};
   if (name !== undefined) update.name = name;
   if (description !== undefined) update.description = description;
+  if (folderId !== undefined) update.folderId = folderId === 'root' ? null : folderId;
+  
   const world = await World.findOneAndUpdate(
     { _id: worldId, userId },
     { $set: update },
@@ -73,11 +115,15 @@ async function createFolder({ userId, name, parentId = null }) {
   };
 }
 
-async function updateFolder({ userId, folderId, name }) {
+async function updateFolder({ userId, folderId, name, parentId }) {
   await connectDB();
+  const update = {};
+  if (name !== undefined) update.name = name;
+  if (parentId !== undefined) update.parentId = parentId === 'root' ? null : parentId;
+
   const folder = await Folder.findOneAndUpdate(
     { _id: folderId, userId },
-    { $set: { name } },
+    { $set: update },
     { new: true }
   ).lean();
   if (!folder) throw new Error('Folder not found');
@@ -188,25 +234,29 @@ async function deleteConnection({ userId, worldId, edgeId }) {
 async function getWorlds({ userId }) {
   await connectDB();
   const worlds = await World.find({ userId }).sort({ updatedAt: -1 }).lean();
-  return worlds.map(w => ({
-    worldId: w._id.toString(),
-    name: w.name,
-    description: w.description,
-    isPredictionWorld: w.isPredictionWorld,
-    folderId: w.folderId?.toString() || null,
-    nodeCount: w.nodes?.length || 0,
-    link: `${getBaseUrl()}/worlds/${w._id}`,
-  }));
+  return {
+    worlds: worlds.map(w => ({
+      worldId: w._id.toString(),
+      name: w.name,
+      description: w.description,
+      isPredictionWorld: w.isPredictionWorld,
+      folderId: w.folderId?.toString() || null,
+      nodeCount: w.nodes?.length || 0,
+      link: `${getBaseUrl()}/worlds/${w._id}`,
+    }))
+  };
 }
 
 async function getFolders({ userId }) {
   await connectDB();
   const folders = await Folder.find({ userId }).sort({ updatedAt: -1 }).lean();
-  return folders.map(f => ({
-    folderId: f._id.toString(),
-    name: f.name,
-    parentId: f.parentId?.toString() || null,
-  }));
+  return {
+    folders: folders.map(f => ({
+      folderId: f._id.toString(),
+      name: f.name,
+      parentId: f.parentId?.toString() || null,
+    }))
+  };
 }
 
 async function getWorld({ userId, worldId }) {
@@ -315,6 +365,33 @@ async function swapNodes({ userId, worldId, nodeId1, nodeId2 }) {
 
 async function createPredictionWorld({ userId, location, predictionYear = 2036 }) {
   if (!location) throw new Error('Location/City name is required for Decade 2.0 prediction.');
+  
+  // Check for duplicate request
+  if (isDuplicatePrediction(userId, location)) {
+    const recent = getRecentPrediction(userId, location);
+    console.log(`[Decade 2.0] Duplicate request blocked for ${location} (user: ${userId})`);
+    console.log(`[Decade 2.0] Recent request status: ${recent?.status}, worldId: ${recent?.worldId}`);
+    
+    if (recent?.worldId && recent?.status === 'completed') {
+      return {
+        success: true,
+        message: `Decade 2.0 prediction for "${location}" was already completed. The world is ready at the link below.`,
+        worldId: recent.worldId,
+        link: `${getBaseUrl()}/worlds/${recent.worldId}`,
+        duplicate: true,
+      };
+    }
+    
+    return {
+      success: false,
+      error: `A prediction for "${location}" is already in progress. Please wait for it to complete (about 1-2 minutes).`,
+      duplicate: true,
+    };
+  }
+  
+  // Record this prediction request
+  recordPredictionRequest(userId, location, null, 'pending');
+  console.log(`[Decade 2.0] Starting new prediction for ${location} (user: ${userId})`);
 
   await connectDB();
 
@@ -370,16 +447,22 @@ async function createPredictionWorld({ userId, location, predictionYear = 2036 }
     }
 
     const data = await res.json();
+    
+    // Record successful completion
+    recordPredictionRequest(userId, location, data.predictedWorldId, 'completed');
+    console.log(`[Decade 2.0] Prediction completed successfully. World ID: ${data.predictedWorldId}`);
 
     return {
       success: true,
-      message: `Decade 2.0 Automation Complete: I have searched for "${location}", performed the urban satellite analysis, and generated 7 distinct nodes (Main Streets, Residential, Healthcare, etc.) with 360° panoramas for the year 2036.`,
+      message: `Decade 2.0 Automation Complete: I have searched for "${location}", performed the urban satellite analysis, and generated ${data.nodesAdded || 7} distinct nodes (Main Streets, Residential, Healthcare, etc.) with 360° panoramas for the year 2036.`,
       worldId: data.predictedWorldId,
       link: `${getBaseUrl()}/worlds/${data.predictedWorldId}`,
       summary: data.summary,
     };
   } catch (err) {
     console.error('Decade 2.0 Automation Error:', err);
+    // Clear the pending request on error so user can retry
+    predictionRequestStore.delete(getPredictionKey(userId, location));
     throw new Error(`Automation failed: ${err.message}`);
   }
 }
@@ -459,252 +542,9 @@ async function requestWorldEdit({ userId, worldId }) {
   };
 }
 
-const tools = [
-  {
-    name: 'createWorld',
-    description: 'Create a new virtual world. Returns a link to the new world.',
-    parameters: {
-      type: 'object',
-      properties: {
-        name: { type: 'string', description: 'Name of the world' },
-        description: { type: 'string', description: 'Optional description' },
-      },
-      required: ['name'],
-    },
-  },
-  {
-    name: 'updateWorld',
-    description: 'Update an existing world name or description.',
-    parameters: {
-      type: 'object',
-      properties: {
-        worldId: { type: 'string' },
-        name: { type: 'string' },
-        description: { type: 'string' },
-      },
-      required: ['worldId'],
-    },
-  },
-  {
-    name: 'deleteWorld',
-    description: 'Delete a world permanently.',
-    parameters: {
-      type: 'object',
-      properties: {
-        worldId: { type: 'string' },
-      },
-      required: ['worldId'],
-    },
-  },
-  {
-    name: 'createFolder',
-    description: 'Create a new folder to organize worlds.',
-    parameters: {
-      type: 'object',
-      properties: {
-        name: { type: 'string' },
-        parentId: { type: 'string', description: 'Optional parent folder ID' },
-      },
-      required: ['name'],
-    },
-  },
-  {
-    name: 'updateFolder',
-    description: 'Rename a folder.',
-    parameters: {
-      type: 'object',
-      properties: {
-        folderId: { type: 'string' },
-        name: { type: 'string' },
-      },
-      required: ['folderId', 'name'],
-    },
-  },
-  {
-    name: 'deleteFolder',
-    description: 'Delete a folder.',
-    parameters: {
-      type: 'object',
-      properties: {
-        folderId: { type: 'string' },
-      },
-      required: ['folderId'],
-    },
-  },
-  {
-    name: 'createNode',
-    description: 'Create a new space/node inside a world.',
-    parameters: {
-      type: 'object',
-      properties: {
-        worldId: { type: 'string' },
-        label: { type: 'string' },
-        position: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' } } },
-      },
-      required: ['worldId'],
-    },
-  },
-  {
-    name: 'updateNode',
-    description: 'Update a node label or position.',
-    parameters: {
-      type: 'object',
-      properties: {
-        worldId: { type: 'string' },
-        nodeId: { type: 'string' },
-        label: { type: 'string' },
-        position: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' } } },
-      },
-      required: ['worldId', 'nodeId'],
-    },
-  },
-  {
-    name: 'deleteNode',
-    description: 'Delete a node from a world.',
-    parameters: {
-      type: 'object',
-      properties: {
-        worldId: { type: 'string' },
-        nodeId: { type: 'string' },
-      },
-      required: ['worldId', 'nodeId'],
-    },
-  },
-  {
-    name: 'createConnection',
-    description: 'Create a connection (edge) between two nodes.',
-    parameters: {
-      type: 'object',
-      properties: {
-        worldId: { type: 'string' },
-        sourceId: { type: 'string' },
-        targetId: { type: 'string' },
-      },
-      required: ['worldId', 'sourceId', 'targetId'],
-    },
-  },
-  {
-    name: 'deleteConnection',
-    description: 'Delete a connection between nodes.',
-    parameters: {
-      type: 'object',
-      properties: {
-        worldId: { type: 'string' },
-        edgeId: { type: 'string' },
-      },
-      required: ['worldId', 'edgeId'],
-    },
-  },
-  {
-    name: 'getWorlds',
-    description: 'List all worlds for the user.',
-    parameters: { type: 'object', properties: {} },
-  },
-  {
-    name: 'getFolders',
-    description: 'List all folders for the user.',
-    parameters: { type: 'object', properties: {} },
-  },
-  {
-    name: 'getWorld',
-    description: 'Get details of a specific world including nodes and edges.',
-    parameters: {
-      type: 'object',
-      properties: {
-        worldId: { type: 'string' },
-      },
-      required: ['worldId'],
-    },
-  },
-  {
-    name: 'createPredictionWorld',
-    description: 'Mark a world as a prediction world and add a prediction node with coordinates.',
-    parameters: {
-      type: 'object',
-      properties: {
-        worldId: { type: 'string' },
-        latitude: { type: 'number' },
-        longitude: { type: 'number' },
-        predictionYear: { type: 'number' },
-      },
-      required: ['worldId', 'latitude', 'longitude'],
-    },
-  },
-  {
-    name: 'requestImageUpload',
-    description: 'Trigger an image upload prompt in the chat UI for a specific node. Use this when the user wants to upload images to a node.',
-    parameters: {
-      type: 'object',
-      properties: {
-        worldId: { type: 'string' },
-        nodeId: { type: 'string' },
-      },
-      required: ['worldId', 'nodeId'],
-    },
-  },
-  {
-    name: 'swapNodes',
-    description: 'Swap the data (images, panorama, label) between two existing nodes.',
-    parameters: {
-      type: 'object',
-      properties: {
-        worldId: { type: 'string' },
-        nodeId1: { type: 'string', description: 'ID or Name of the first node' },
-        nodeId2: { type: 'string', description: 'ID or Name of the second node' },
-      },
-      required: ['worldId', 'nodeId1', 'nodeId2'],
-    },
-  },
-  {
-    name: 'createDecadePrediction',
-    description: 'Automated Decade 2.0 prediction. Detects location from query and generates a predictive world map.',
-    parameters: {
-      type: 'object',
-      properties: {
-        location: { type: 'string', description: 'The city or area to predict (e.g. "Chennai", "New York")' },
-        predictionYear: { type: 'number', description: 'Future year, default 2036' },
-        worldId: { type: 'string', description: 'Optional: add prediction to existing world' },
-      },
-      required: ['location'],
-    },
-  },
-  {
-    name: 'requestNodeEdit',
-    description: 'Open the AI Visual Studio (prompt box) for a specific node so the user can edit it.',
-    parameters: {
-      type: 'object',
-      properties: {
-        worldId: { type: 'string' },
-        nodeId: { type: 'string', description: 'ID or label of the node to edit' },
-      },
-      required: ['worldId', 'nodeId'],
-    },
-  },
-  {
-    name: 'requestWorldEdit',
-    description: 'Open the AI Visual Studio for the main view of a world.',
-    parameters: {
-      type: 'object',
-      properties: {
-        worldId: { type: 'string' },
-      },
-      required: ['worldId'],
-    },
-  },
-  {
-    name: 'requestPreview',
-    description: 'Provide a preview link to view a world or node.',
-    parameters: {
-      type: 'object',
-      properties: {
-        worldId: { type: 'string' },
-      },
-      required: ['worldId'],
-    },
-  },
-];
+import { tools } from './agent-tools';
 
-const functionMap = {
+export const functionMap = {
   createWorld,
   updateWorld,
   deleteWorld,
@@ -731,13 +571,17 @@ const functionMap = {
 const SYSTEM_PROMPT = `You are XRPlot Agent, an advanced AI assistant that helps users build and manage 360° virtual worlds.
 
 You have full control over the XRPlot application. You can:
-- Create, update, and delete Worlds, Folders, Nodes, and Connections
-- Set up prediction worlds for Decade 2.0 analysis
-- Trigger automated urban predictions for any city using createDecadePrediction
-- Swap nodes using swapNodes
-- Trigger image uploads for nodes
-- Open the AI Visual Studio (Prompt Box) for editing nodes
-- Retrieve information about existing content
+- Create, update, and delete Worlds, Folders, Nodes, and Connections.
+- List all your worlds using getWorlds and folders using getFolders.
+- See details of a specific world (including its nodes) using getWorld.
+- Move worlds to folders using updateWorld (set folderId).
+- Move folders into other folders (nesting) using updateFolder (set parentId). Use "root" to move to top level.
+- Set up prediction worlds for Decade 2.0 analysis.
+- Trigger automated urban predictions for any city using createDecadePrediction.
+- Swap nodes using swapNodes.
+- Trigger image uploads for nodes.
+- Open the AI Visual Studio (Prompt Box) for editing nodes.
+- Retrieve information about existing content.
 
 RULES:
 1. Always confirm the action you took and provide a direct link to the resource.
@@ -752,6 +596,7 @@ RULES:
 7. If the user says "cancel", acknowledge it and stop the current operation.
 8. Be concise but helpful.
 9. Links should be absolute and point to the correct pages.
+10. If the user asks to "list nodes" or "show nodes" for a world, use getWorld(worldId).
 `;
 
 export async function runAgent({ userId, messages }) {

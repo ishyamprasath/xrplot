@@ -220,7 +220,7 @@ export default function DashboardPage() {
   const renderWorldGrid = (worldsToRender, emptyMessage) => {
     if (worldsToRender.length === 0) {
       return (
-        <div className="empty-state-mini" style={{ padding: '40px', textAlign: 'center', background: 'rgba(255,255,255,0.02)', borderRadius: '16px', border: '1px dashed rgba(255,255,255,0.1)' }}>
+        <div className="empty-state-mini" style={{ padding: '40px', textAlign: 'center', background: 'var(--bg-card)', borderRadius: '16px', border: '1px dashed var(--border-medium)' }}>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{emptyMessage}</p>
         </div>
       );
@@ -253,21 +253,21 @@ export default function DashboardPage() {
               <button 
                 className="card-menu-trigger"
                 onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu?.id === world._id ? null : { type: 'world', id: world._id }); }}
-                style={{ position: 'absolute', top: 12, left: 12, zIndex: 6, background: 'rgba(0,0,0,0.5)', border: 'none', color: 'white', padding: '4px', borderRadius: '4px', cursor: 'pointer' }}
+                style={{ position: 'absolute', top: 12, left: 12, zIndex: 6, background: 'rgba(0,0,0,0.5)', border: 'none', color: '#fff', padding: '4px', borderRadius: '4px', cursor: 'pointer' }}
               >
                 <MoreVertical size={16} />
               </button>
               
               {activeMenu?.type === 'world' && activeMenu?.id === world._id && (
-                <div className="card-menu-dropdown" onClick={e => e.stopPropagation()} style={{ position: 'absolute', top: 40, left: 12, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', borderRadius: '8px', zIndex: 10, padding: '8px', minWidth: '140px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}>
-                  <button onClick={() => { setShowMove({ type: 'world', id: world._id, currentParentId: world.folderId }); setActiveMenu(null); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px', background: 'none', border: 'none', color: 'white', textAlign: 'left', cursor: 'pointer', fontSize: '0.85rem' }}>
+                <div className="menu-dropdown" onClick={e => e.stopPropagation()} style={{ top: 40, left: 12 }}>
+                  <button className="menu-item" onClick={() => { setShowMove({ type: 'world', id: world._id, currentParentId: world.folderId }); setActiveMenu(null); }}>
                     <Move size={14} /> Move to...
                   </button>
-                  <button onClick={() => { setShowCopy({ type: 'world', id: world._id }); setActiveMenu(null); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px', background: 'none', border: 'none', color: 'white', textAlign: 'left', cursor: 'pointer', fontSize: '0.85rem' }}>
+                  <button className="menu-item" onClick={() => { setShowCopy({ type: 'world', id: world._id }); setActiveMenu(null); }}>
                     <Copy size={14} /> Copy to...
                   </button>
-                  <div style={{ height: '1px', background: 'var(--border-subtle)', margin: '4px 0' }} />
-                  <button onClick={() => { setShowDelete({ type: 'world', id: world._id }); setActiveMenu(null); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px', background: 'none', border: 'none', color: 'var(--red-light)', textAlign: 'left', cursor: 'pointer', fontSize: '0.85rem' }}>
+                  <div className="menu-divider" />
+                  <button className="menu-item danger" onClick={() => { setShowDelete({ type: 'world', id: world._id }); setActiveMenu(null); }}>
                     <Trash2 size={14} /> Delete
                   </button>
                 </div>
@@ -305,7 +305,7 @@ export default function DashboardPage() {
           <div style={{ display: 'flex', gap: '12px' }}>
             <button
               className="btn btn-secondary btn-lg"
-              style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: 'white', color: 'black', border: '1px solid #ddd' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
               onClick={() => router.push('/prediction')}
             >
               <Globe size={18} /> Decade 2.0
@@ -355,9 +355,8 @@ export default function DashboardPage() {
                 {rootFolders.map(folder => (
                   <div 
                     key={folder._id} 
-                    className="card folder-card"
+                    className="folder-card"
                     onClick={() => router.push(`/dashboard/folders/${folder._id}`)}
-                    style={{ cursor: 'pointer', position: 'relative', display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px' }}
                   >
                     <Folder size={24} style={{ color: 'var(--violet)' }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -370,21 +369,20 @@ export default function DashboardPage() {
                     <button 
                       className="card-menu-trigger"
                       onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu?.id === folder._id ? null : { type: 'folder', id: folder._id }); }}
-                      style={{ background: 'none', border: 'none', color: 'var(--text-muted)', padding: '4px', cursor: 'pointer' }}
                     >
                       <MoreVertical size={16} />
                     </button>
                     
                     {activeMenu?.type === 'folder' && activeMenu?.id === folder._id && (
-                      <div className="card-menu-dropdown" onClick={e => e.stopPropagation()} style={{ position: 'absolute', top: '100%', right: 0, marginTop: '8px', background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', borderRadius: '8px', zIndex: 10, padding: '8px', minWidth: '140px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}>
-                        <button onClick={() => { setShowMove({ type: 'folder', id: folder._id, currentParentId: folder.parentId }); setActiveMenu(null); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px', background: 'none', border: 'none', color: 'white', textAlign: 'left', cursor: 'pointer', fontSize: '0.85rem' }}>
+                      <div className="menu-dropdown" onClick={e => e.stopPropagation()} style={{ top: '100%', right: 0, marginTop: '8px' }}>
+                        <button className="menu-item" onClick={() => { setShowMove({ type: 'folder', id: folder._id, currentParentId: folder.parentId }); setActiveMenu(null); }}>
                           <Move size={14} /> Move to...
                         </button>
-                        <button onClick={() => { setShowCopy({ type: 'folder', id: folder._id }); setActiveMenu(null); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px', background: 'none', border: 'none', color: 'white', textAlign: 'left', cursor: 'pointer', fontSize: '0.85rem' }}>
+                        <button className="menu-item" onClick={() => { setShowCopy({ type: 'folder', id: folder._id }); setActiveMenu(null); }}>
                           <Copy size={14} /> Copy to...
                         </button>
-                        <div style={{ height: '1px', background: 'var(--border-subtle)', margin: '4px 0' }} />
-                        <button onClick={() => { setShowDelete({ type: 'folder', id: folder._id }); setActiveMenu(null); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px', background: 'none', border: 'none', color: 'var(--red-light)', textAlign: 'left', cursor: 'pointer', fontSize: '0.85rem' }}>
+                        <div className="menu-divider" />
+                        <button className="menu-item danger" onClick={() => { setShowDelete({ type: 'folder', id: folder._id }); setActiveMenu(null); }}>
                           <Trash2 size={14} /> Delete
                         </button>
                       </div>
@@ -506,7 +504,8 @@ export default function DashboardPage() {
                     }
                   }}
                   disabled={moving && showMove}
-                  style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'white', textAlign: 'left', cursor: moving && showMove ? 'not-allowed' : 'pointer', opacity: moving && showMove ? 0.5 : 1 }}
+                  className="menu-item"
+                  style={{ padding: '12px', border: '1px solid var(--border-subtle)', borderRadius: '8px', marginBottom: '8px', opacity: moving && showMove ? 0.5 : 1 }}
                 >
                   <Globe size={18} /> Root (No Folder)
                 </button>
@@ -528,7 +527,8 @@ export default function DashboardPage() {
                       }
                     }}
                     disabled={moving && showMove}
-                    style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'white', textAlign: 'left', cursor: moving && showMove ? 'not-allowed' : 'pointer', opacity: moving && showMove ? 0.5 : 1 }}
+                    className="menu-item"
+                    style={{ padding: '12px', border: '1px solid var(--border-subtle)', borderRadius: '8px', marginBottom: '8px', opacity: moving && showMove ? 0.5 : 1 }}
                   >
                     <Folder size={18} style={{ color: 'var(--violet)' }} /> {folder.name}
                   </button>

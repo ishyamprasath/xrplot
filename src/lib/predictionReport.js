@@ -99,6 +99,7 @@ Rules:
 - Past decade should show moderate growth.
 - Future decade should show accelerated growth (1.5x-3x depending on NDBI slope).
 - Generate exactly 4-6 hotspots covering different scene types.
+- Focus on modern, clean, and realistic urban evolution. Avoid "sci-fi" or "overly futuristic" elements like holographic displays, drone docks, or autonomous flying vehicles. Instead, emphasize improved infrastructure, better urban planning, and sustainable modern architecture.
 - Use vivid, specific descriptions for each hotspot.
 - Confidence scores should reflect urban density (higher density = higher confidence).`;
 
@@ -177,7 +178,7 @@ function generateFallbackReport(lat, lng, ndbiTrend, urbanDensity, locationName)
         id: 'main_street_0',
         type: 'main_street',
         name: 'Central Market Avenue',
-        description: `A bustling 2036 commercial street with smart storefronts, drone delivery docks, and pedestrian-only zones lined with AR signage.`,
+        description: `A bustling 2036 commercial street with modern storefronts, wide pedestrian sidewalks, and improved urban infrastructure.`,
         confidence: 0.85,
         growthFactor: 2.5,
       },
@@ -185,7 +186,7 @@ function generateFallbackReport(lat, lng, ndbiTrend, urbanDensity, locationName)
         id: 'residential_0',
         type: 'residential',
         name: 'Skyline Residences',
-        description: `High-density eco-towers with vertical gardens, solar facades, and community rooftops replacing older low-rise blocks.`,
+        description: `Modern residential complexes with clean architectural lines, green balconies, and well-planned community spaces.`,
         confidence: 0.78,
         growthFactor: 3.0,
       },
@@ -193,7 +194,7 @@ function generateFallbackReport(lat, lng, ndbiTrend, urbanDensity, locationName)
         id: 'healthcare_0',
         type: 'healthcare',
         name: 'Metro General Medical Campus',
-        description: `An expanded 2036 hospital complex with AI diagnostics centers, telemedicine hubs, and green healing gardens.`,
+        description: `A modern, expanded hospital campus with advanced medical facilities, glass-and-steel architecture, and peaceful healing gardens.`,
         confidence: 0.72,
         growthFactor: 1.8,
       },
@@ -201,7 +202,7 @@ function generateFallbackReport(lat, lng, ndbiTrend, urbanDensity, locationName)
         id: 'education_0',
         type: 'education',
         name: 'Future Learning Academy',
-        description: `A modern campus blending physical and virtual classrooms, with maker labs, biotech workshops, and open learning plazas.`,
+        description: `A contemporary educational campus with open-air learning spaces, modern architecture, and integrated digital facilities.`,
         confidence: 0.68,
         growthFactor: 2.0,
       },
@@ -209,7 +210,7 @@ function generateFallbackReport(lat, lng, ndbiTrend, urbanDensity, locationName)
         id: 'green_space_0',
         type: 'green_space',
         name: 'Eco-Park Central',
-        description: `A regenerated urban forest with carbon-capture walkways, biodiversity corridors, and community farming plots.`,
+        description: `A beautifully landscaped urban park with paved trails, community seating, and lush greenery integrated into the city.`,
         confidence: 0.65,
         growthFactor: 1.5,
       },
@@ -217,15 +218,15 @@ function generateFallbackReport(lat, lng, ndbiTrend, urbanDensity, locationName)
         id: 'tech_hub_0',
         type: 'tech_hub',
         name: 'Innovation District',
-        description: `Glass-and-steel tech campus housing AI research labs, startup incubators, and autonomous transit terminals.`,
+        description: `A sophisticated business district with modern glass-and-steel office buildings, landscaped plazas, and efficient transit links.`,
         confidence: 0.70,
         growthFactor: 2.8,
       },
     ],
     keyInsights: [
-      `Residential density projected to increase ${Math.round((future.residentialBlocks / past.residentialBlocks - 1) * 100)}% with vertical eco-tower construction.`,
+      `Residential density projected to increase ${Math.round((future.residentialBlocks / past.residentialBlocks - 1) * 100)}% with modern multi-story housing.`,
       `Healthcare infrastructure expanding to ${future.hospitals} facilities to serve a population of ${future.population}k residents.`,
-      `Commercial corridors transforming into smart pedestrian zones with integrated drone logistics.`,
+      `Commercial corridors transforming into modern pedestrian-friendly zones with improved urban infrastructure.`,
     ],
   };
 }

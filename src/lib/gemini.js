@@ -33,7 +33,7 @@ Provide detailed insights with specific data points and realistic projections fo
     console.log('[Gemini] Sending request to gemini-3-flash-preview...');
     const result = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: prompt,
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
     });
     console.log('[Gemini] Raw result:', JSON.stringify(result).slice(0, 300));
 
@@ -108,7 +108,7 @@ Generate a detailed projection that shows how ${placeName} will realistically ev
 
   const result = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
-    contents: prompt,
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
   });
 
   if (result.text) {

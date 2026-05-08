@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import { 
   Globe, Folder, LogOut, MessageSquare, 
   Moon, Sun, ChevronDown, ChevronRight, Hexagon,
-  History, Sparkles
+  History, Sparkles, Mic
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -88,8 +88,12 @@ export default function Sidebar() {
             <span>Dashboard</span>
           </Link>
           <Link href="/chat" className={`sidebar-item chat-item ${pathname === '/chat' ? 'active' : ''}`}>
-            <Sparkles size={18} />
-            <span>Agentic AI Chat</span>
+            <MessageSquare size={18} />
+            <span>Chat Interface</span>
+          </Link>
+          <Link href="/voice-chat" className={`sidebar-item voice-item ${pathname === '/voice-chat' ? 'active' : ''}`}>
+            <Mic size={18} />
+            <span>Voice Interface</span>
           </Link>
           <Link href="/prediction" className={`sidebar-item ${pathname === '/prediction' ? 'active' : ''}`}>
             <History size={18} />

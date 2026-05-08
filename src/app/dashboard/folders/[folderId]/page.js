@@ -294,7 +294,7 @@ export default function FolderPage() {
                       key={f._id} 
                       className="card folder-card"
                       onClick={() => router.push(`/dashboard/folders/${f._id}`)}
-                      style={{ cursor: 'pointer', position: 'relative', display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px' }}
+                      style={{ cursor: 'pointer', position: 'relative', display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: '12px' }}
                     >
                       <Folder size={24} style={{ color: 'var(--violet)' }} />
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -312,11 +312,11 @@ export default function FolderPage() {
                       </button>
                       
                       {activeMenu?.type === 'folder' && activeMenu?.id === f._id && (
-                        <div className="card-menu-dropdown" onClick={e => e.stopPropagation()} style={{ position: 'absolute', top: '100%', right: 0, marginTop: '8px', background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', borderRadius: '8px', zIndex: 10, padding: '8px', minWidth: '140px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}>
-                          <button onClick={() => { setShowMove({ type: 'folder', id: f._id, currentParentId: f.parentId }); setActiveMenu(null); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px', background: 'none', border: 'none', color: 'white', textAlign: 'left', cursor: 'pointer', fontSize: '0.85rem' }}>
+                        <div className="card-menu-dropdown" onClick={e => e.stopPropagation()} style={{ position: 'absolute', top: '100%', right: 0, marginTop: '8px', background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', borderRadius: '8px', zIndex: 10, padding: '8px', minWidth: '140px', boxShadow: 'var(--shadow-lg)' }}>
+                          <button onClick={() => { setShowMove({ type: 'folder', id: f._id, currentParentId: f.parentId }); setActiveMenu(null); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px', background: 'none', border: 'none', color: 'var(--text-primary)', textAlign: 'left', cursor: 'pointer', fontSize: '0.85rem' }}>
                             <Move size={14} /> Move to...
                           </button>
-                          <button onClick={() => { setShowCopy({ type: 'folder', id: f._id }); setActiveMenu(null); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px', background: 'none', border: 'none', color: 'white', textAlign: 'left', cursor: 'pointer', fontSize: '0.85rem' }}>
+                          <button onClick={() => { setShowCopy({ type: 'folder', id: f._id }); setActiveMenu(null); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px', background: 'none', border: 'none', color: 'var(--text-primary)', textAlign: 'left', cursor: 'pointer', fontSize: '0.85rem' }}>
                             <Copy size={14} /> Copy to...
                           </button>
                           <div style={{ height: '1px', background: 'var(--border-subtle)', margin: '4px 0' }} />
@@ -364,17 +364,17 @@ export default function FolderPage() {
                         <button 
                           className="card-menu-trigger"
                           onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu?.id === world._id ? null : { type: 'world', id: world._id }); }}
-                          style={{ position: 'absolute', top: 12, left: 12, zIndex: 6, background: 'rgba(0,0,0,0.5)', border: 'none', color: 'white', padding: '4px', borderRadius: '4px', cursor: 'pointer' }}
+                          style={{ position: 'absolute', top: 12, left: 12, zIndex: 6, background: 'rgba(0,0,0,0.5)', border: 'none', color: '#fff', padding: '4px', borderRadius: '4px', cursor: 'pointer' }}
                         >
                           <MoreVertical size={16} />
                         </button>
                         
                         {activeMenu?.type === 'world' && activeMenu?.id === world._id && (
-                          <div className="card-menu-dropdown" onClick={e => e.stopPropagation()} style={{ position: 'absolute', top: 40, left: 12, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', borderRadius: '8px', zIndex: 10, padding: '8px', minWidth: '140px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}>
-                            <button onClick={() => { setShowMove({ type: 'world', id: world._id, currentParentId: world.folderId }); setActiveMenu(null); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px', background: 'none', border: 'none', color: 'white', textAlign: 'left', cursor: 'pointer', fontSize: '0.85rem' }}>
+                          <div className="card-menu-dropdown" onClick={e => e.stopPropagation()} style={{ position: 'absolute', top: 40, left: 12, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', borderRadius: '8px', zIndex: 10, padding: '8px', minWidth: '140px', boxShadow: 'var(--shadow-lg)' }}>
+                            <button onClick={() => { setShowMove({ type: 'world', id: world._id, currentParentId: world.folderId }); setActiveMenu(null); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px', background: 'none', border: 'none', color: 'var(--text-primary)', textAlign: 'left', cursor: 'pointer', fontSize: '0.85rem' }}>
                               <Move size={14} /> Move to...
                             </button>
-                            <button onClick={() => { setShowCopy({ type: 'world', id: world._id }); setActiveMenu(null); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px', background: 'none', border: 'none', color: 'white', textAlign: 'left', cursor: 'pointer', fontSize: '0.85rem' }}>
+                            <button onClick={() => { setShowCopy({ type: 'world', id: world._id }); setActiveMenu(null); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px', background: 'none', border: 'none', color: 'var(--text-primary)', textAlign: 'left', cursor: 'pointer', fontSize: '0.85rem' }}>
                               <Copy size={14} /> Copy to...
                             </button>
                             <div style={{ height: '1px', background: 'var(--border-subtle)', margin: '4px 0' }} />
@@ -489,7 +489,7 @@ export default function FolderPage() {
                     }
                   }}
                   disabled={moving && showMove}
-                  style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'white', textAlign: 'left', cursor: moving && showMove ? 'not-allowed' : 'pointer', opacity: moving && showMove ? 0.5 : 1 }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'var(--text-primary)', textAlign: 'left', cursor: moving && showMove ? 'not-allowed' : 'pointer', opacity: moving && showMove ? 0.5 : 1 }}
                 >
                   <Globe size={18} /> Root (No Folder)
                 </button>
@@ -510,7 +510,7 @@ export default function FolderPage() {
                       }
                     }}
                     disabled={moving && showMove}
-                    style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'white', textAlign: 'left', cursor: moving && showMove ? 'not-allowed' : 'pointer', opacity: moving && showMove ? 0.5 : 1 }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'var(--text-primary)', textAlign: 'left', cursor: moving && showMove ? 'not-allowed' : 'pointer', opacity: moving && showMove ? 0.5 : 1 }}
                   >
                     <Folder size={18} style={{ color: 'var(--violet)' }} /> {f.name}
                   </button>

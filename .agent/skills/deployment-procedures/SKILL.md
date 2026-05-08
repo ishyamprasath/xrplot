@@ -1,3 +1,21 @@
+Console Error
+
+
+
+WebSocket Error: {}
+Call Stack
+4
+
+createConsoleError
+file:///C:/Users/SHYAM%20PRASATH%20S/OneDrive/Desktop/DESKTOP%20FOLDERS/Software%20Devleopment/xrplot/.next/dev/static/chunks/node_modules_next_dist_115brz8._.js (2333:71)
+handleConsoleError
+file:///C:/Users/SHYAM%20PRASATH%20S/OneDrive/Desktop/DESKTOP%20FOLDERS/Software%20Devleopment/xrplot/.next/dev/static/chunks/node_modules_next_dist_115brz8._.js (3119:54)
+console.error
+file:///C:/Users/SHYAM%20PRASATH%20S/OneDrive/Desktop/DESKTOP%20FOLDERS/Software%20Devleopment/xrplot/.next/dev/static/chunks/node_modules_next_dist_115brz8._.js (3266:57)
+socketRef.current.onerror
+file:///C:/Users/SHYAM%20PRASATH%20S/OneDrive/Desktop/DESKTOP%20FOLDERS/Software%20Devleopment/xrplot/.next/dev/static/chunks/_107z1z.._.js (104:25)
+1
+2
 ---
 name: deployment-procedures
 description: Production deployment principles and decision-making. Safe deployment workflows, rollback strategies, and verification. Teaches thinking, not scripts.

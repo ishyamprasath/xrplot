@@ -19,60 +19,80 @@ const SCENE_PROMPTS = {
   main_street: (ctx) => `Generate a highly photorealistic equirectangular 360-degree panoramic street-level view of a MAIN COMMERCIAL STREET in ${ctx.locationName || 'an urban area'} in the year 2036.
 
 Context: Built-up density ${ctx.urbanDensity}%, ${ctx.trend} trajectory.
-Scene: A vibrant pedestrian-friendly shopping avenue with smart digital storefronts, drone delivery docks, outdoor cafes, AR signage, solar pavement, and modern tram tracks. Bustling but clean. No cars in the central lane.
+Scene: A vibrant, clean, and pedestrian-friendly shopping avenue with modern storefronts, elegant signage, well-maintained public transport (modern trams or electric buses), organized street furniture, and improved urban lighting. Bustling but orderly and clean.
 Style: Photorealistic, seamless 360° equirectangular, 2:1 feel, warm daylight, no text/watermarks.`,
 
   residential: (ctx) => `Generate a highly photorealistic equirectangular 360-degree panoramic view of a RESIDENTIAL DISTRICT in ${ctx.locationName || 'an urban area'} in the year 2036.
 
 Context: Built-up density ${ctx.urbanDensity}%, ${ctx.trend} trajectory.
-Scene: High-density eco-towers with vertical gardens, rooftop community spaces, solar glass facades, tree-lined walkways, shared EV charging stations, and children playing in safe courtyards.
+Scene: Modern apartment complexes with clean architectural lines, green balconies, organized parking, well-maintained common parks, paved walkways, and sustainable street lighting. A safe, clean, and family-friendly residential environment.
 Style: Photorealistic, seamless 360° equirectangular, golden hour lighting, no text/watermarks.`,
 
   healthcare: (ctx) => `Generate a highly photorealistic equirectangular 360-degree panoramic view of a HEALTHCARE CAMPUS in ${ctx.locationName || 'an urban area'} in the year 2036.
 
 Context: Built-up density ${ctx.urbanDensity}%, ${ctx.trend} trajectory.
-Scene: A modern medical complex with clean white-and-green architecture, healing gardens, glass atriums, patient drop-off zones with autonomous shuttles, and digital health kiosks. Calm, professional atmosphere.
+Scene: A modern medical campus with clean, professional architecture, spacious drop-off zones, landscaped healing gardens, glass facades, and well-organized patient facilities. A calm and efficient healthcare environment.
 Style: Photorealistic, seamless 360° equirectangular, bright natural light, no text/watermarks.`,
 
   education: (ctx) => `Generate a highly photorealistic equirectangular 360-degree panoramic view of an EDUCATION CAMPUS in ${ctx.locationName || 'an urban area'} in the year 2036.
 
 Context: Built-up density ${ctx.urbanDensity}%, ${ctx.trend} trajectory.
-Scene: A futuristic learning academy with open-air classrooms, maker labs with glass walls, student plazas with holographic info displays, biotech greenhouses, and skateboard/bike-friendly paths.
+Scene: A modern educational campus with open-air learning spaces, contemporary architecture featuring glass and wood, student plazas with digital information kiosks, lush campus greenery, and dedicated cycling paths.
 Style: Photorealistic, seamless 360° equirectangular, midday vibrant light, no text/watermarks.`,
 
   green_space: (ctx) => `Generate a highly photorealistic equirectangular 360-degree panoramic view of an URBAN PARK in ${ctx.locationName || 'an urban area'} in the year 2036.
 
 Context: Built-up density ${ctx.urbanDensity}%, ${ctx.trend} trajectory.
-Scene: A regenerated urban forest with elevated carbon-capture walkways, biodiversity ponds, community farming plots, outdoor yoga decks, solar-powered lighting, and wildflower meadows weaving between modern buildings.
+Scene: A beautifully landscaped urban park with paved walking trails, serene water features, community seating areas, modern playground equipment, sustainable solar lighting, and well-maintained lawns between modern buildings.
 Style: Photorealistic, seamless 360° equirectangular, lush greenery, soft morning light, no text/watermarks.`,
 
   tech_hub: (ctx) => `Generate a highly photorealistic equirectangular 360-degree panoramic view of a TECH & BUSINESS HUB in ${ctx.locationName || 'an urban area'} in the year 2036.
 
 Context: Built-up density ${ctx.urbanDensity}%, ${ctx.trend} trajectory.
-Scene: A sleek glass-and-steel innovation district with AI research towers, startup co-working terraces, autonomous vehicle lanes, drone ports on rooftops, and holographic building signage. Fast, dynamic energy.
+Scene: A sophisticated business district with modern glass-and-steel office buildings, landscaped plazas, organized traffic management, underground parking, and clean, professional signage. A vibrant and productive commercial environment.
 Style: Photorealistic, seamless 360° equirectangular, twilight blue-hour with interior glow, no text/watermarks.`,
 };
 
 async function generateSinglePanorama(prompt, sceneType, index) {
   console.log(`[ImageGen] Generating ${sceneType}[${index}]...`);
-  const result = await ai.models.generateContent({
-    model: 'gemini-3.1-flash-image-preview',
-    contents: prompt,
-  });
+  console.log(`[ImageGen] Prompt length: ${prompt.length} chars`);
+  
+  let result;
+  try {
+    result = await ai.models.generateContent({
+      model: 'gemini-3.1-flash-image-preview', // Correct model for image generation
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      config: { responseModalities: ['IMAGE'] },
+    });
+  } catch (modelErr) {
+    console.error(`[ImageGen] Model error for ${sceneType}[${index}]:`, modelErr.message);
+    throw new Error(`Image generation failed: ${modelErr.message}`);
+  }
 
-  console.log(`[ImageGen] Raw result type:`, typeof result, 'keys:', Object.keys(result || {}));
+  console.log(`[ImageGen] Raw result type:`, typeof result);
+  console.log(`[ImageGen] Result keys:`, Object.keys(result || {}));
+  
+  // Log full result structure for debugging
+  if (result) {
+    console.log(`[ImageGen] Result has candidates:`, !!result.candidates);
+    console.log(`[ImageGen] Result has response:`, !!result.response);
+  }
 
   let imageBase64 = null;
   let imageMimeType = 'image/png';
 
   // Try multiple response formats
   const candidates = result?.candidates || result?.response?.candidates || [];
+  console.log(`[ImageGen] Candidates count:`, candidates.length);
+  
   if (candidates.length > 0 && candidates[0]?.content?.parts) {
+    console.log(`[ImageGen] Parts count:`, candidates[0].content.parts.length);
     for (const part of candidates[0].content.parts) {
+      console.log(`[ImageGen] Part type:`, Object.keys(part).join(', '));
       if (part.inlineData) {
         imageBase64 = part.inlineData.data;
         imageMimeType = part.inlineData.mimeType || 'image/png';
-        console.log(`[ImageGen] Found inlineData image for ${sceneType}[${index}]`);
+        console.log(`[ImageGen] Found inlineData image for ${sceneType}[${index}], size: ${imageBase64?.length || 0} chars`);
         break;
       }
     }
@@ -81,27 +101,46 @@ async function generateSinglePanorama(prompt, sceneType, index) {
   // Fallback: check if result has a .media or .images property (newer SDK versions)
   if (!imageBase64 && result?.media) {
     imageBase64 = result.media;
+    console.log(`[ImageGen] Found image in .media property`);
   }
 
   if (!imageBase64) {
     let reason = 'No image was generated by the AI.';
+    let responseText = '';
     if (candidates.length > 0 && candidates[0]?.content?.parts) {
       for (const part of candidates[0].content.parts) {
-        if (part.text) { reason = part.text; break; }
+        if (part.text) { 
+          responseText += part.text + ' ';
+        }
       }
+    }
+    if (responseText.trim()) {
+      reason = `AI response: ${responseText.trim().substring(0, 200)}`;
     }
     console.error(`[ImageGen] FAILED ${sceneType}[${index}]:`, reason);
     throw new Error(`${sceneType}[${index}]: ${reason}`);
   }
 
   console.log(`[ImageGen] Uploading ${sceneType}[${index}] to Cloudinary...`);
+  console.log(`[ImageGen] Image base64 length: ${imageBase64.length} chars`);
+  console.log(`[ImageGen] MIME type: ${imageMimeType}`);
+  
+  // Validate base64 data
+  if (!imageBase64 || imageBase64.length < 100) {
+    throw new Error(`Invalid image data: base64 too short (${imageBase64?.length || 0} chars)`);
+  }
+  
   const uploadResponse = await new Promise((resolve, reject) => {
+    const uploadData = `data:${imageMimeType};base64,${imageBase64}`;
+    console.log(`[ImageGen] Upload data length: ${uploadData.length} chars`);
+    
     cloudinary.uploader.upload(
-      `data:${imageMimeType};base64,${imageBase64}`,
+      uploadData,
       { folder: 'xrplot/predictions', resource_type: 'image', quality: 'auto', format: 'jpg' },
       (error, result) => {
         if (error) {
           console.error(`[ImageGen] Cloudinary upload failed:`, error.message);
+          console.error(`[ImageGen] Cloudinary error details:`, JSON.stringify(error));
           reject(error);
         } else {
           console.log(`[ImageGen] Cloudinary upload success:`, result.secure_url);
@@ -138,10 +177,10 @@ Urban growth context:
 - Confidence in prediction: ${(confidence * 100).toFixed(0)}%.
 
 Style guidelines:
-- Modern, minimalist architectural aesthetic.
+- Modern, clean, and minimalist architectural aesthetic.
 - Seamless 360° equirectangular layout (2:1 aspect ratio feel).
 - Photorealistic lighting, shadows, and textures.
-- Show futuristic but believable urban evolution — smart infrastructure, clean energy elements, pedestrian-friendly spaces.
+- Show modern and realistically evolved urban infrastructure — improved roads, sustainable energy elements, and well-organized public spaces.
 - No text, no watermarks, no UI elements.
 
 Return only the generated panoramic image.`;
