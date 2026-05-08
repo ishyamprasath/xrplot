@@ -173,7 +173,15 @@ export default function Sidebar() {
           <button className="icon-btn" onClick={toggleTheme} title="Toggle Theme">
             {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
           </button>
-          <button className="icon-btn" onClick={async () => { setSigningOut(true); try { await signOut({ redirectUrl: '/sign-in' }); } catch { router.push('/sign-in'); } }} title="Sign Out">
+          <button className="icon-btn" onClick={async () => { 
+            try { 
+              await signOut(); 
+              router.push('/sign-in');
+            } catch (err) { 
+              console.error('Sign out failed:', err);
+              router.push('/sign-in'); 
+            } 
+          }} title="Sign Out">
             <LogOut size={18} />
           </button>
         </div>
