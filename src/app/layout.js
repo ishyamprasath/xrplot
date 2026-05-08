@@ -22,10 +22,9 @@ export default function RootLayout({ children }) {
           borderRadius: '12px',
         },
       }}
-      signInForceRedirectUrl={true}
-      signUpForceRedirectUrl={true}
-      afterSignInUrl="/dashboard"
-      afterSignUpUrl="/dashboard"
+      signInFallbackRedirectUrl="/dashboard"
+      signUpFallbackRedirectUrl="/dashboard"
+      afterSignOutUrl="/sign-in"
       signInMode="modal"
       signUpMode="modal"
     >
