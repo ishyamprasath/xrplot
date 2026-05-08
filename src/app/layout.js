@@ -25,8 +25,6 @@ export default function RootLayout({ children }) {
       signInFallbackRedirectUrl="/dashboard"
       signUpFallbackRedirectUrl="/dashboard"
       afterSignOutUrl="/sign-in"
-      signInMode="modal"
-      signUpMode="modal"
     >
       <html lang="en">
         <body>
