@@ -100,9 +100,14 @@ Respond ONLY in this exact JSON format:
 
     // Update image classifications
     if (analysis.classifications && Array.isArray(node.images)) {
+      const VALID_DIRECTIONS = ['up', 'down', 'left', 'right', 'middle'];
       for (const cls of analysis.classifications) {
         if (node.images[cls.index]) {
-          node.images[cls.index].classification = cls.direction;
+          const currentCls = node.images[cls.index].classification?.toLowerCase();
+          // Only overwrite if it's not already a valid specific direction set by the user
+          if (!VALID_DIRECTIONS.includes(currentCls)) {
+            node.images[cls.index].classification = cls.direction;
+          }
         }
       }
       world.markModified('nodes');

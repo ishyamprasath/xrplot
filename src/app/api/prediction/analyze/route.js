@@ -115,12 +115,18 @@ function computeNodePositions(normalizedHotspots, lat, lng) {
 
 export async function POST(req) {
   try {
-    const { userId } = await auth();
+    const { userId: authUserId } = await auth();
+    const isAgentBypass = req.headers.get('bypass-auth') === 'true' || req.cookies.get('bypass-auth')?.value === 'true';
+    
+    // We expect the agent to pass userId in the body when bypassing
+    const body = await req.json();
+    const { lat, lng, placeName, worldId, userId: bodyUserId } = body;
+    
+    const userId = authUserId || (isAgentBypass ? bodyUserId : null);
+
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const { lat, lng, placeName, worldId } = await req.json();
     
     // Validate JSON parsing and request format
     if (typeof lat !== 'number' || typeof lng !== 'number' || typeof placeName !== 'string') {

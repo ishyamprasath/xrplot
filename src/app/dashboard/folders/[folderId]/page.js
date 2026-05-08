@@ -1,9 +1,9 @@
 'use client';
 
-import { useUser, UserButton } from '@clerk/nextjs';
+import { useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Globe, Plus, MapPin, Link2, Edit2, Trash2, Sparkles, Hexagon, Folder, History, MoreVertical, Copy, Move, ChevronRight, FolderPlus, ArrowLeft } from 'lucide-react';
+import { Globe, Plus, MapPin, Link2, Edit2, Trash2, Sparkles, Folder, History, MoreVertical, Copy, Move, ChevronRight, FolderPlus, ArrowLeft } from 'lucide-react';
 import { useParams } from 'next/navigation';
 
 export default function FolderPage() {
@@ -243,15 +243,6 @@ export default function FolderPage() {
   return (
     <>
       <div className="animated-bg" />
-
-      {/* Navbar */}
-      <nav className="navbar">
-        <div className="navbar-brand">
-          <Hexagon size={24} className="brand-icon" strokeWidth={2.5} />
-          <span>XRPlot</span>
-        </div>
-        <UserButton afterSignOutUrl="/sign-in" />
-      </nav>
 
       {/* Folder View */}
       <div className="dashboard">

@@ -1,6 +1,7 @@
 import { ClerkProvider } from '@clerk/nextjs';
 import { dark } from '@clerk/themes';
 import './globals.css';
+import SidebarWrapper from '@/components/SidebarWrapper';
 
 export const metadata = {
   title: 'XRPlot — 360° Virtual World Builder',
@@ -25,12 +26,15 @@ export default function RootLayout({ children }) {
       signUpForceRedirectUrl={true}
       afterSignInUrl="/dashboard"
       afterSignUpUrl="/dashboard"
-      // Force consistent authentication methods
       signInMode="modal"
       signUpMode="modal"
     >
       <html lang="en">
-        <body>{children}</body>
+        <body>
+          <SidebarWrapper>
+            {children}
+          </SidebarWrapper>
+        </body>
       </html>
     </ClerkProvider>
   );
