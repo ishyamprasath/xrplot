@@ -24,6 +24,7 @@ export default function FolderPage() {
   const [showCopy, setShowCopy] = useState(null);
   const [activeMenu, setActiveMenu] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [moving, setMoving] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [newWorldName, setNewWorldName] = useState('');
 
@@ -135,6 +136,7 @@ export default function FolderPage() {
   };
 
   const handleMoveWorld = async (worldId, targetFolderId) => {
+    setMoving(true);
     try {
       const res = await fetch(`/api/worlds/${worldId}/move`, {
         method: 'POST',
@@ -145,9 +147,19 @@ export default function FolderPage() {
         const updatedWorld = await res.json();
         setWorlds(prev => prev.map(w => w._id === worldId ? updatedWorld : w));
         setShowMove(null);
+      } else {
+        const errorData = await res.json();
+        alert(`Failed to move world: ${errorData.error || 'Unknown error'}`);
+        // Refresh data to ensure UI consistency
+        await fetchData();
       }
     } catch (err) {
       console.error('Failed to move world:', err);
+      alert('Failed to move world. Please try again.');
+      // Refresh data to ensure UI consistency
+      await fetchData();
+    } finally {
+      setMoving(false);
     }
   };
 
@@ -485,7 +497,8 @@ export default function FolderPage() {
                       item.type === 'world' ? handleCopyWorld(item.id, null) : handleCopyFolder(item.id, null);
                     }
                   }}
-                  style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'white', textAlign: 'left', cursor: 'pointer' }}
+                  disabled={moving && showMove}
+                  style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'white', textAlign: 'left', cursor: moving && showMove ? 'not-allowed' : 'pointer', opacity: moving && showMove ? 0.5 : 1 }}
                 >
                   <Globe size={18} /> Root (No Folder)
                 </button>
@@ -505,7 +518,8 @@ export default function FolderPage() {
                         item.type === 'world' ? handleCopyWorld(item.id, f._id) : handleCopyFolder(item.id, f._id);
                       }
                     }}
-                    style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'white', textAlign: 'left', cursor: 'pointer' }}
+                    disabled={moving && showMove}
+                    style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'white', textAlign: 'left', cursor: moving && showMove ? 'not-allowed' : 'pointer', opacity: moving && showMove ? 0.5 : 1 }}
                   >
                     <Folder size={18} style={{ color: 'var(--violet)' }} /> {f.name}
                   </button>

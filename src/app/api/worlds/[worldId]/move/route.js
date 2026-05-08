@@ -6,11 +6,15 @@ import World from '@/models/World';
 export async function POST(request, { params }) {
   try {
     const { userId } = await auth();
-    const { worldId } = params;
+    const { worldId } = await params;
+    console.log('[MOVE API] userId:', userId);
+    console.log('[MOVE API] worldId:', worldId);
+    
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await request.json();
     const { folderId } = body;
+    console.log('[MOVE API] folderId:', folderId);
 
     await connectDB();
     const world = await World.findOneAndUpdate(
@@ -18,6 +22,8 @@ export async function POST(request, { params }) {
       { folderId: folderId || null },
       { new: true }
     );
+
+    console.log('[MOVE API] world found:', world ? 'YES' : 'NO');
 
     if (!world) return NextResponse.json({ error: 'World not found' }, { status: 404 });
 

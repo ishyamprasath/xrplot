@@ -6,7 +6,7 @@ import World from '@/models/World';
 export async function POST(request, { params }) {
   try {
     const { userId } = await auth();
-    const { worldId } = params;
+    const { worldId } = await params;
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await request.json();

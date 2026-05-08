@@ -18,6 +18,7 @@ export default function DashboardPage() {
   const [showDelete, setShowDelete] = useState(null); // { type: 'world'|'folder', id }
   const [showMove, setShowMove] = useState(null); // { type: 'world'|'folder', id, currentParentId }
   const [showCopy, setShowCopy] = useState(null); // { type: 'world'|'folder', id }
+  const [moving, setMoving] = useState(false);
   
   const [newWorldName, setNewWorldName] = useState('');
   const [newFolderName, setNewFolderName] = useState('');
@@ -122,19 +123,40 @@ export default function DashboardPage() {
   };
 
   const handleMoveWorld = async (worldId, targetFolderId) => {
+    setMoving(true);
+    console.log('[MOVE FRONTEND] worldId:', worldId);
+    console.log('[MOVE FRONTEND] targetFolderId:', targetFolderId);
+    console.log('[MOVE FRONTEND] worldId type:', typeof worldId);
+    
     try {
       const res = await fetch(`/api/worlds/${worldId}/move`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ folderId: targetFolderId }),
       });
+      
+      console.log('[MOVE FRONTEND] response status:', res.status);
+      console.log('[MOVE FRONTEND] response ok:', res.ok);
+      
       if (res.ok) {
         const updatedWorld = await res.json();
+        console.log('[MOVE FRONTEND] success:', updatedWorld);
         setWorlds(prev => prev.map(w => w._id === worldId ? updatedWorld : w));
         setShowMove(null);
+      } else {
+        const errorData = await res.json();
+        console.log('[MOVE FRONTEND] error:', errorData);
+        alert(`Failed to move world: ${errorData.error || 'Unknown error'}`);
+        // Refresh data to ensure UI consistency
+        await fetchData();
       }
     } catch (err) {
       console.error('Failed to move world:', err);
+      alert('Failed to move world. Please try again.');
+      // Refresh data to ensure UI consistency
+      await fetchData();
+    } finally {
+      setMoving(false);
     }
   };
 
@@ -271,6 +293,7 @@ export default function DashboardPage() {
     <>
       <div className="animated-bg" />
 
+      
       {/* Navbar */}
       <nav className="navbar">
         <div className="navbar-brand">
@@ -492,7 +515,8 @@ export default function DashboardPage() {
                       item.type === 'world' ? handleCopyWorld(item.id, null) : handleCopyFolder(item.id, null);
                     }
                   }}
-                  style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'white', textAlign: 'left', cursor: 'pointer' }}
+                  disabled={moving && showMove}
+                  style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'white', textAlign: 'left', cursor: moving && showMove ? 'not-allowed' : 'pointer', opacity: moving && showMove ? 0.5 : 1 }}
                 >
                   <Globe size={18} /> Root (No Folder)
                 </button>
@@ -513,7 +537,8 @@ export default function DashboardPage() {
                         item.type === 'world' ? handleCopyWorld(item.id, folder._id) : handleCopyFolder(item.id, folder._id);
                       }
                     }}
-                    style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'white', textAlign: 'left', cursor: 'pointer' }}
+                    disabled={moving && showMove}
+                    style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'white', textAlign: 'left', cursor: moving && showMove ? 'not-allowed' : 'pointer', opacity: moving && showMove ? 0.5 : 1 }}
                   >
                     <Folder size={18} style={{ color: 'var(--violet)' }} /> {folder.name}
                   </button>
