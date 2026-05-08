@@ -666,6 +666,40 @@ const tools = [
       required: ['location'],
     },
   },
+  {
+    name: 'requestNodeEdit',
+    description: 'Open the AI Visual Studio (prompt box) for a specific node so the user can edit it.',
+    parameters: {
+      type: 'object',
+      properties: {
+        worldId: { type: 'string' },
+        nodeId: { type: 'string', description: 'ID or label of the node to edit' },
+      },
+      required: ['worldId', 'nodeId'],
+    },
+  },
+  {
+    name: 'requestWorldEdit',
+    description: 'Open the AI Visual Studio for the main view of a world.',
+    parameters: {
+      type: 'object',
+      properties: {
+        worldId: { type: 'string' },
+      },
+      required: ['worldId'],
+    },
+  },
+  {
+    name: 'requestPreview',
+    description: 'Provide a preview link to view a world or node.',
+    parameters: {
+      type: 'object',
+      properties: {
+        worldId: { type: 'string' },
+      },
+      required: ['worldId'],
+    },
+  },
 ];
 
 const functionMap = {
