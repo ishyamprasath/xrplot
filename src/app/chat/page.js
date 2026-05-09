@@ -239,18 +239,9 @@ function ChatContent() {
             <span>Back</span>
           </Link>
           <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Conversations</h3>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button className="new-chat-btn" onClick={createNewChat} title="New Chat" style={{ width: '32px', height: '32px', borderRadius: 'var(--radius-md)', background: 'var(--violet)', border: 'none', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-              <Plus size={18} />
-            </button>
-            <button 
-              className="sidebar-close-btn"
-              onClick={() => setSidebarOpen(false)}
-              title="Close sidebar"
-            >
-              <X size={18} />
-            </button>
-          </div>
+          <button className="new-chat-btn" onClick={createNewChat} title="New Chat" style={{ width: '32px', height: '32px', borderRadius: 'var(--radius-md)', background: 'var(--violet)', border: 'none', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', marginLeft: 'auto' }}>
+            <Plus size={18} />
+          </button>
         </div>
 
         <div className="chat-list">
@@ -286,13 +277,6 @@ function ChatContent() {
         {activeChatId ? (
           <>
             <div className="chat-header">
-              <button 
-                className="chat-menu-btn"
-                onClick={() => setSidebarOpen(true)}
-                title="Open conversations"
-              >
-                <Menu size={20} />
-              </button>
               <h2><Bot size={18} style={{ marginRight: 8, verticalAlign: 'middle', color: 'var(--violet-light)' }} /> XRPlot Agent</h2>
             </div>
 

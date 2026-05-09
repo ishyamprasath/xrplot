@@ -44,8 +44,27 @@ export default function Sidebar() {
         fetch('/api/folders')
       ]);
       
-      if (worldsRes.ok) setWorlds(await worldsRes.json());
-      if (foldersRes.ok) setFolders(await foldersRes.json());
+      if (worldsRes.ok) {
+        const worldsText = await worldsRes.text();
+        try {
+          setWorlds(JSON.parse(worldsText));
+        } catch (parseErr) {
+          console.error('Failed to parse worlds JSON:', parseErr, 'Response:', worldsText.substring(0, 200));
+        }
+      } else {
+        console.error('Worlds API failed:', worldsRes.status, worldsRes.statusText);
+      }
+      
+      if (foldersRes.ok) {
+        const foldersText = await foldersRes.text();
+        try {
+          setFolders(JSON.parse(foldersText));
+        } catch (parseErr) {
+          console.error('Failed to parse folders JSON:', parseErr, 'Response:', foldersText.substring(0, 200));
+        }
+      } else {
+        console.error('Folders API failed:', foldersRes.status, foldersRes.statusText);
+      }
     } catch (err) {
       console.error('Failed to fetch data for sidebar:', err);
     } finally {

@@ -1757,24 +1757,28 @@ a:hover {
     border-color: var(--violet);
   }
 
-  /* Sidebar close button - visible on mobile sidebar */
-  .sidebar-close-btn {
+  /* New chat button in sidebar */
+  .new-chat-btn {
     display: flex;
     align-items: center;
     justify-content: center;
     width: 32px;
     height: 32px;
-    background: var(--bg-card);
-    border: 1px solid var(--border-subtle);
     border-radius: var(--radius-md);
-    color: var(--text-secondary);
+    background: var(--violet);
+    border: none;
+    color: white;
     cursor: pointer;
+    transition: all 0.2s ease;
   }
 
-  .sidebar-close-btn:hover {
-    background: var(--bg-card-hover);
-    color: var(--text-primary);
-    border-color: var(--red);
+  .new-chat-btn:hover {
+    background: var(--violet-light);
+    transform: scale(1.05);
+  }
+
+  .new-chat-btn:active {
+    transform: scale(0.95);
   }
 
   /* Sidebar overlay for mobile */

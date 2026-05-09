@@ -28,13 +28,23 @@ export default function SidebarWrapper({ children }) {
     return <>{children}</>;
   }
 
-  // Chat and voice-chat pages have their own layout but still need mobile footer
-  if (isChatPage || isVoiceChatPage) {
+  // Chat page has its own layout but still needs mobile footer
+  if (isChatPage) {
     return (
       <>
         {children}
         <Sidebar />
       </>
+    );
+  }
+
+  // Voice-chat page needs full layout with sidebar
+  if (isVoiceChatPage) {
+    return (
+      <div className="app-layout">
+        <Sidebar />
+        <main className="main-content">{children}</main>
+      </div>
     );
   }
 

@@ -735,6 +735,8 @@ export default function VoiceChatPage() {
           padding: 2rem;
           background: var(--bg-primary);
           color: var(--text-primary);
+          width: 100%;
+          max-width: 100%;
         }
 
         @media (max-width: 768px) {
