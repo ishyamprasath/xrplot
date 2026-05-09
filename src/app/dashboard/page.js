@@ -3,7 +3,7 @@
 import { useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Globe, Plus, MapPin, Link2, Edit2, Trash2, Sparkles, Folder, History, MoreVertical, Copy, Move, ChevronRight, FolderPlus } from 'lucide-react';
+import { Globe, MapPin, Link2, Edit2, Trash2, Sparkles, Folder, History, MoreVertical, Copy, Move, ChevronRight, FolderPlus } from 'lucide-react';
 
 export default function DashboardPage() {
   const { user } = useUser();
@@ -124,10 +124,6 @@ export default function DashboardPage() {
 
   const handleMoveWorld = async (worldId, targetFolderId) => {
     setMoving(true);
-    console.log('[MOVE FRONTEND] worldId:', worldId);
-    console.log('[MOVE FRONTEND] targetFolderId:', targetFolderId);
-    console.log('[MOVE FRONTEND] worldId type:', typeof worldId);
-    
     try {
       const res = await fetch(`/api/worlds/${worldId}/move`, {
         method: 'POST',
@@ -135,25 +131,18 @@ export default function DashboardPage() {
         body: JSON.stringify({ folderId: targetFolderId }),
       });
       
-      console.log('[MOVE FRONTEND] response status:', res.status);
-      console.log('[MOVE FRONTEND] response ok:', res.ok);
-      
       if (res.ok) {
         const updatedWorld = await res.json();
-        console.log('[MOVE FRONTEND] success:', updatedWorld);
         setWorlds(prev => prev.map(w => w._id === worldId ? updatedWorld : w));
         setShowMove(null);
       } else {
         const errorData = await res.json();
-        console.log('[MOVE FRONTEND] error:', errorData);
         alert(`Failed to move world: ${errorData.error || 'Unknown error'}`);
-        // Refresh data to ensure UI consistency
         await fetchData();
       }
     } catch (err) {
       console.error('Failed to move world:', err);
       alert('Failed to move world. Please try again.');
-      // Refresh data to ensure UI consistency
       await fetchData();
     } finally {
       setMoving(false);
@@ -274,8 +263,8 @@ export default function DashboardPage() {
               )}
             </div>
             <div className="world-card-name" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {world.name.length > 28 ? `${world.name.substring(0, 25)}...` : world.name}
-                        </div>
+              {world.name.length > 28 ? `${world.name.substring(0, 25)}...` : world.name}
+            </div>
             <div className="world-card-meta">
               <span><MapPin size={12} /> {world.nodes?.length || 0} spaces</span>
               <span><Link2 size={12} /> {world.edges?.length || 0} connections</span>
@@ -292,7 +281,6 @@ export default function DashboardPage() {
   return (
     <>
       <div className="animated-bg" />
-
       
       <div className="dashboard">
         <div className="dashboard-header">
@@ -314,7 +302,7 @@ export default function DashboardPage() {
               <FolderPlus size={18} /> New Folder
             </button>
             <button className="btn btn-primary btn-lg" onClick={() => setShowCreate(true)}>
-              <Plus size={18} /> Create New World
+              Create New World
             </button>
           </div>
         </div>
@@ -339,7 +327,7 @@ export default function DashboardPage() {
             <div style={{ display: 'flex', gap: '16px', marginTop: '24px' }}>
               <button className="btn btn-secondary btn-lg" onClick={() => router.push('/prediction')}><Globe size={18} /> Decade 2.0</button>
               <button className="btn btn-ghost btn-lg" onClick={() => setShowCreateFolder({ parentId: null })}><FolderPlus size={18} /> New Folder</button>
-              <button className="btn btn-primary btn-lg" onClick={() => setShowCreate(true)}><Plus size={18} /> Create Your First World</button>
+              <button className="btn btn-primary btn-lg" onClick={() => setShowCreate(true)}>Create Your First World</button>
             </div>
           </div>
         ) : (
@@ -563,15 +551,6 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
-
-      {/* Mobile Floating Action Button */}
-      <button 
-        className="mobile-fab"
-        onClick={() => setShowCreate(true)}
-        title="Create New World"
-      >
-        <Plus size={24} />
-      </button>
     </>
   );
 }
