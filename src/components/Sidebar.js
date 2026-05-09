@@ -5,8 +5,8 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { 
   Globe, Folder, LogOut, MessageSquare, 
-  Moon, Sun, ChevronDown, ChevronRight, Hexagon,
-  History, Sparkles, Mic
+  Moon, Sun, ChevronDown, ChevronRight,
+  History, Sparkles, Mic, User
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -74,9 +74,11 @@ export default function Sidebar() {
   if (!isLoaded || (!user && !signingOut)) return null;
 
   return (
-    <div className="app-sidebar">
+    <>
+    {/* Desktop Sidebar */}
+    <div className="app-sidebar desktop-sidebar">
       <div className="sidebar-header" onClick={() => router.push('/dashboard')}>
-        <Hexagon size={28} className="brand-icon" strokeWidth={2.5} />
+        <img src="/logo.png" alt="XRPlot" className="brand-icon" style={{ width: 38, height: 28, borderRadius: 6 }} />
         <span className="brand-text">XRPlot</span>
       </div>
 
@@ -191,5 +193,30 @@ export default function Sidebar() {
         </div>
       </div>
     </div>
+
+    {/* Mobile Footer */}
+    <div className="mobile-footer">
+      <Link href="/dashboard" className={`mobile-footer-item ${pathname === '/dashboard' ? 'active' : ''}`}>
+        <Globe size={22} />
+        <span>Dashboard</span>
+      </Link>
+      <Link href="/chat" className={`mobile-footer-item ${pathname === '/chat' ? 'active' : ''}`}>
+        <MessageSquare size={22} />
+        <span>Chat</span>
+      </Link>
+      <Link href="/voice-chat" className={`mobile-footer-item ${pathname === '/voice-chat' ? 'active' : ''}`}>
+        <Mic size={22} />
+        <span>Voice</span>
+      </Link>
+      <button className={`mobile-footer-item theme-item`} onClick={toggleTheme}>
+        {theme === 'dark' ? <Sun size={22} /> : <Moon size={22} />}
+        <span>Theme</span>
+      </button>
+      <Link href="/prediction" className={`mobile-footer-item ${pathname === '/prediction' ? 'active' : ''}`}>
+        <History size={22} />
+        <span>Decade 2.0</span>
+      </Link>
+    </div>
+    </>
   );
 }

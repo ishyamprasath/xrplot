@@ -89,9 +89,9 @@ function PredictionInner() {
   };
 
   return (
-    <div style={{ display: 'flex', width: '100%', height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
+    <div className="prediction-container" style={{ display: 'flex', width: '100%', height: 'calc(100vh - 65px)', backgroundColor: 'var(--bg-primary)' }}>
       {/* Sidebar Controls */}
-      <div style={{ width: '400px', height: '100%', backgroundColor: 'var(--bg-secondary)', borderRight: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', padding: '24px', zIndex: 10, boxShadow: 'var(--shadow-lg)', overflowY: 'auto' }}>
+      <div className="prediction-sidebar" style={{ width: '400px', minWidth: '400px', height: '100%', backgroundColor: 'var(--bg-secondary)', borderRight: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', padding: '24px', zIndex: 10, boxShadow: 'var(--shadow-lg)', overflowY: 'auto' }}>
         <button onClick={() => router.back()} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', marginBottom: '32px', padding: 0 }}>
           <ArrowLeft size={16} /> Back to Editor
         </button>
@@ -182,7 +182,7 @@ function PredictionInner() {
       </div>
 
       {/* Map Area */}
-      <div style={{ flex: 1, position: 'relative' }}>
+      <div className="prediction-map" style={{ flex: 1, position: 'relative' }}>
         {isLoaded ? (
           <GoogleMap mapContainerStyle={mapContainerStyle} center={defaultCenter} zoom={13} onLoad={onLoad} onUnmount={onUnmount} onClick={onMapClick} options={{ mapTypeId: 'hybrid', disableDefaultUI: true, zoomControl: true }}>
             {pin && (

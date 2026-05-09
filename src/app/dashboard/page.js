@@ -563,6 +563,15 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* Mobile Floating Action Button */}
+      <button 
+        className="mobile-fab"
+        onClick={() => setShowCreate(true)}
+        title="Create New World"
+      >
+        <Plus size={24} />
+      </button>
     </>
   );
 }

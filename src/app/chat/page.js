@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Plus, MessageSquare, Send, Trash2, Bot, User, Upload, ArrowLeft } from 'lucide-react';
+import { Plus, MessageSquare, Send, Trash2, Bot, User, Upload, ArrowLeft, Menu, X } from 'lucide-react';
 import Link from 'next/link';
 import ChatUploadModal from '@/components/ChatUploadModal';
 import PromptModal from '@/components/prompt/PromptModal';
@@ -21,6 +21,7 @@ function ChatContent() {
   const [fetchingChats, setFetchingChats] = useState(true);
   const [uploadTarget, setUploadTarget] = useState(null);
   const [editTarget, setEditTarget] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const messagesEndRef = useRef(null);
   const fetchChats = useCallback(async () => {
     try {
@@ -224,17 +225,32 @@ function ChatContent() {
 
   return (
     <div className="chat-layout">
+      {/* Mobile Sidebar Overlay */}
+      <div 
+        className={`sidebar-overlay ${sidebarOpen ? 'active' : ''}`}
+        onClick={() => setSidebarOpen(false)}
+      />
+
       {/* Chat Sidebar */}
-      <div className="chat-sidebar">
-        <div className="chat-sidebar-header">
-          <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', textDecoration: 'none' }}>
+      <div className={`chat-sidebar ${sidebarOpen ? 'open' : ''}`}>
+        <div className="chat-sidebar-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px', borderBottom: '1px solid var(--border-subtle)' }}>
+          <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.85rem', fontWeight: 600 }}>
             <ArrowLeft size={18} />
-            <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Back</span>
+            <span>Back</span>
           </Link>
-          <h3>Conversations</h3>
-          <button className="new-chat-btn" onClick={createNewChat} title="New Chat">
-            <Plus size={18} />
-          </button>
+          <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Conversations</h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button className="new-chat-btn" onClick={createNewChat} title="New Chat" style={{ width: '32px', height: '32px', borderRadius: 'var(--radius-md)', background: 'var(--violet)', border: 'none', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+              <Plus size={18} />
+            </button>
+            <button 
+              className="sidebar-close-btn"
+              onClick={() => setSidebarOpen(false)}
+              title="Close sidebar"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         <div className="chat-list">
@@ -247,7 +263,7 @@ function ChatContent() {
               <button
                 key={chat._id}
                 className={`chat-list-item ${activeChatId === chat._id ? 'active' : ''}`}
-                onClick={() => setActiveChatId(chat._id)}
+                onClick={() => { setActiveChatId(chat._id); setSidebarOpen(false); }}
               >
                 <MessageSquare size={16} />
                 <span className="chat-title">{chat.title || 'New Chat'}</span>
@@ -270,6 +286,13 @@ function ChatContent() {
         {activeChatId ? (
           <>
             <div className="chat-header">
+              <button 
+                className="chat-menu-btn"
+                onClick={() => setSidebarOpen(true)}
+                title="Open conversations"
+              >
+                <Menu size={20} />
+              </button>
               <h2><Bot size={18} style={{ marginRight: 8, verticalAlign: 'middle', color: 'var(--violet-light)' }} /> XRPlot Agent</h2>
             </div>
 
@@ -332,11 +355,30 @@ function ChatContent() {
             </div>
           </>
         ) : (
-          <div className="empty-chat-state">
-            <MessageSquare size={48} style={{ opacity: 0.3 }} />
-            <h3>Select or start a conversation</h3>
-            <p>Choose a chat from the sidebar or click the + button to begin.</p>
-          </div>
+          <>
+            <div className="chat-header">
+              <button 
+                className="chat-menu-btn"
+                onClick={() => setSidebarOpen(true)}
+                title="Open conversations"
+              >
+                <Menu size={20} />
+              </button>
+              <h2>Chat Interface</h2>
+            </div>
+            <div className="empty-chat-state">
+              <MessageSquare size={48} style={{ opacity: 0.3 }} />
+              <h3>Select or start a conversation</h3>
+              <p>Choose a chat from the sidebar or click the + button to begin.</p>
+              <button 
+                className="btn btn-primary" 
+                onClick={() => setSidebarOpen(true)}
+                style={{ marginTop: '16px' }}
+              >
+                <Menu size={16} style={{ marginRight: 8 }} /> Open Conversations
+              </button>
+            </div>
+          </>
         )}
       </div>
 

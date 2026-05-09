@@ -7,9 +7,10 @@ import Sidebar from './Sidebar';
 export default function SidebarWrapper({ children }) {
   const pathname = usePathname();
   const { isLoaded, userId } = useAuth();
-  
+
   const isAuthPage = pathname?.startsWith('/sign-in') || pathname?.startsWith('/sign-up');
   const isChatPage = pathname?.startsWith('/chat');
+  const isVoiceChatPage = pathname?.startsWith('/voice-chat');
   const isPublicPage = pathname === '/';
 
   // Prevent flicker: if we are not on an auth page but the user is signed out,
@@ -22,8 +23,19 @@ export default function SidebarWrapper({ children }) {
     );
   }
 
-  if (isAuthPage || isChatPage) {
+  // Auth pages don't need sidebar or footer
+  if (isAuthPage) {
     return <>{children}</>;
+  }
+
+  // Chat and voice-chat pages have their own layout but still need mobile footer
+  if (isChatPage || isVoiceChatPage) {
+    return (
+      <>
+        {children}
+        <Sidebar />
+      </>
+    );
   }
 
   return (

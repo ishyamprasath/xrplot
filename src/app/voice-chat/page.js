@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useUser } from '@clerk/nextjs';
-import { Bot, Volume2, Loader2, Phone, PhoneOff, Activity, X } from 'lucide-react';
+import { Bot, Volume2, Loader2, Phone, PhoneOff, Activity, X, Mic } from 'lucide-react';
 import { tools } from '@/lib/agent-tools';
 import ChatUploadModal from '@/components/ChatUploadModal';
 import PromptModal from '@/components/prompt/PromptModal';
@@ -642,18 +642,9 @@ export default function VoiceChatPage() {
                 <Activity size={28} className="pulse-icon" />
               </div>
             ) : (
-              <Bot size={40} />
+              <Mic size={40} />
             )}
           </div>
-          
-          {/* Animated rings */}
-          {isActive && (
-            <>
-              <div className="ring ring-1" style={{ transform: `scale(${1 + micLevel * 0.8})`, opacity: 0.6 - micLevel * 0.3 }} />
-              <div className="ring ring-2" style={{ transform: `scale(${1 + micLevel * 1.2})`, opacity: 0.4 - micLevel * 0.2 }} />
-              <div className="ring ring-3" style={{ transform: `scale(${1 + micLevel * 1.6})`, opacity: 0.2 - micLevel * 0.1 }} />
-            </>
-          )}
         </div>
         
         {/* Status Text */}
@@ -740,10 +731,94 @@ export default function VoiceChatPage() {
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          min-height: 100vh;
+          min-height: calc(100vh - 65px);
           padding: 2rem;
           background: var(--bg-primary);
           color: var(--text-primary);
+        }
+
+        @media (max-width: 768px) {
+          .voice-chat-container {
+            min-height: calc(100vh - 65px);
+            padding: 1rem;
+            justify-content: flex-start;
+            padding-top: 3rem;
+          }
+
+          .voice-header {
+            margin-bottom: 1.5rem;
+          }
+
+          .voice-header h1 {
+            font-size: 1.5rem;
+          }
+
+          .avatar-container {
+            margin-bottom: 2rem;
+          }
+
+          .avatar-ring {
+            width: 120px;
+            height: 120px;
+          }
+
+          .avatar-inner {
+            width: 80px;
+            height: 80px;
+          }
+
+          .voice-btn {
+            padding: 12px 24px;
+            font-size: 0.9rem;
+          }
+
+          .voice-btn span {
+            display: none;
+          }
+
+          .output-box {
+            max-width: 100%;
+            margin: 0 1rem;
+            padding: 1rem;
+          }
+
+          .error-container {
+            top: 1rem;
+            left: 1rem;
+            right: 1rem;
+            transform: none;
+          }
+
+          .error-box {
+            padding: 1rem;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .voice-chat-container {
+            min-height: calc(100vh - 60px);
+            padding: 0.75rem;
+            padding-top: 2rem;
+          }
+
+          .voice-header h1 {
+            font-size: 1.25rem;
+          }
+
+          .avatar-ring {
+            width: 100px;
+            height: 100px;
+          }
+
+          .avatar-inner {
+            width: 70px;
+            height: 70px;
+          }
+
+          .avatar-inner svg {
+            width: 28px;
+            height: 28px;
+          }
         }
 
         .voice-header {
@@ -804,15 +879,12 @@ export default function VoiceChatPage() {
           width: 100px;
           height: 100px;
           border-radius: 50%;
-          background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 50%, #4f46e5 100%);
+          background: linear-gradient(135deg, #0047AB 0%, #0066CC 50%, #0055B8 100%);
           display: flex;
           align-items: center;
           justify-content: center;
           color: white;
-          box-shadow: 
-            0 0 40px rgba(139, 92, 246, 0.4),
-            0 0 80px rgba(139, 92, 246, 0.2),
-            inset 0 0 20px rgba(255, 255, 255, 0.2);
+          box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.2);
           z-index: 10;
           transition: all 0.3s ease;
         }
@@ -836,7 +908,7 @@ export default function VoiceChatPage() {
           width: 100px;
           height: 100px;
           border-radius: 50%;
-          border: 2px solid rgba(139, 92, 246, 0.5);
+          border: 2px solid rgba(0, 71, 171, 0.5);
           transition: transform 0.1s ease-out, opacity 0.1s ease-out;
           z-index: 1;
         }
