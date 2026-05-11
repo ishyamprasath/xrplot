@@ -236,7 +236,7 @@ function ChatContent() {
         <div className="chat-sidebar-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px', borderBottom: '1px solid var(--border-subtle)' }}>
           <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.85rem', fontWeight: 600 }}>
             <ArrowLeft size={18} />
-            <span></span>
+            <span>Back</span>
           </Link>
           <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Conversations</h3>
           <button className="new-chat-btn" onClick={createNewChat} title="New Chat" style={{ width: '32px', height: '32px', borderRadius: 'var(--radius-md)', background: 'var(--violet)', border: 'none', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', marginLeft: 'auto' }}>
