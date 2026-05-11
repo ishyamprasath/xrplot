@@ -842,15 +842,23 @@ a:hover {
   height: 32px;
   border-radius: 50%;
   background: var(--bg-card);
+<<<<<<< HEAD
   border: 1.5px solid var(--border-medium);
   color: var(--text-primary);
+=======
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+>>>>>>> b7b535f5abb9f831b9ea1a24893a77fde364eae4
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all var(--transition-fast);
   font-size: 1rem;
+<<<<<<< HEAD
   box-shadow: var(--shadow-sm);
+=======
+>>>>>>> b7b535f5abb9f831b9ea1a24893a77fde364eae4
 }
 .modal-close:hover {
   background: var(--bg-card-hover);
@@ -933,6 +941,7 @@ a:hover {
 .confirm-dialog .modal-actions {
   justify-content: center;
 }
+<<<<<<< HEAD
 
 /* ============= App Sidebar ============= */
 .app-layout {
@@ -2078,3 +2087,5 @@ a:hover {
     width: 100%;
   }
 }
+=======
+>>>>>>> b7b535f5abb9f831b9ea1a24893a77fde364eae4

@@ -3,12 +3,13 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 
-export default function PanoramaViewer({ imageUrl, hotspots = [], onHotspotClick, width = '100%', height = '100%' }) {
+export default function PanoramaViewer({ imageUrl, width = '100%', height = '100%' }) {
   const mountRef = useRef(null);
-  const hotspotsContainerRef = useRef(null);
-  const hotspotsRef = useRef(hotspots);
-  useEffect(() => { hotspotsRef.current = hotspots; }, [hotspots]);
   const [loading, setLoading] = useState(true);
+  const rendererRef = useRef(null);
+  const sceneRef = useRef(null);
+  const cameraRef = useRef(null);
+  const animationFrameRef = useRef(null);
 
   useEffect(() => {
     if (!mountRef.current || !imageUrl) return;
@@ -19,24 +20,23 @@ export default function PanoramaViewer({ imageUrl, hotspots = [], onHotspotClick
 
     // Scene setup
     const scene = new THREE.Scene();
+    sceneRef.current = scene;
+
     const camera = new THREE.PerspectiveCamera(75, containerWidth / containerHeight, 0.1, 1000);
     camera.position.set(0, 0, 0.1);
+    cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(containerWidth, containerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
     container.appendChild(renderer.domElement);
+    rendererRef.current = renderer;
 
-    // Create sphere
+    // Create sphere with equirectangular texture
     const geometry = new THREE.SphereGeometry(500, 60, 40);
-    geometry.scale(-1, 1, 1);
+    geometry.scale(-1, 1, 1); // Invert to render inside
 
-    // Load texture directly
     const textureLoader = new THREE.TextureLoader();
-    textureLoader.setCrossOrigin('anonymous');
-    
-    let animationFrameId;
-
     textureLoader.load(
       imageUrl,
       (texture) => {
@@ -99,7 +99,7 @@ export default function PanoramaViewer({ imageUrl, hotspots = [], onHotspotClick
 
     // Animation loop
     const animate = () => {
-      animationFrameId = requestAnimationFrame(animate);
+      animationFrameRef.current = requestAnimationFrame(animate);
 
       phi = THREE.MathUtils.degToRad(90 - lat);
       theta = THREE.MathUtils.degToRad(lon);
@@ -111,40 +111,6 @@ export default function PanoramaViewer({ imageUrl, hotspots = [], onHotspotClick
       );
       camera.lookAt(target);
       renderer.render(scene, camera);
-
-      // Render Hotspots (manual DOM update to avoid React thrashing)
-      const w = container.clientWidth;
-      const h = container.clientHeight;
-      const hw = w / 2;
-      const hh = h / 2;
-
-      const hotspotData = hotspotsRef.current || [];
-      const hotspotDomElements = hotspotsContainerRef.current?.children;
-
-      if (hotspotDomElements && hotspotDomElements.length === hotspotData.length) {
-         hotspotData.forEach((hotspot, i) => {
-            const el = hotspotDomElements[i];
-            const hTheta = hotspot.angle;
-            const hPhi = Math.PI / 2;
-            
-            const vec = new THREE.Vector3(
-              400 * Math.sin(hPhi) * Math.cos(hTheta),
-              400 * Math.cos(hPhi),
-              400 * Math.sin(hPhi) * Math.sin(hTheta)
-            );
-
-            vec.project(camera);
-
-            if (vec.z > 1) {
-               el.style.display = 'none';
-            } else {
-               const sx = (vec.x * hw) + hw;
-               const sy = -(vec.y * hh) + hh;
-               el.style.display = 'flex';
-               el.style.transform = `translate(-50%, -50%) translate(${sx}px, ${sy}px)`;
-            }
-         });
-      }
     };
     animate();
 
@@ -159,7 +125,7 @@ export default function PanoramaViewer({ imageUrl, hotspots = [], onHotspotClick
     window.addEventListener('resize', handleResize);
 
     return () => {
-      cancelAnimationFrame(animationFrameId);
+      cancelAnimationFrame(animationFrameRef.current);
       container.removeEventListener('mousedown', onPointerDown);
       container.removeEventListener('mousemove', onPointerMove);
       container.removeEventListener('mouseup', onPointerUp);
@@ -168,21 +134,19 @@ export default function PanoramaViewer({ imageUrl, hotspots = [], onHotspotClick
       container.removeEventListener('touchend', onPointerUp);
       container.removeEventListener('wheel', onWheel);
       window.removeEventListener('resize', handleResize);
-      renderer.dispose();
-      geometry.dispose();
       if (container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
       }
+      renderer.dispose();
     };
   }, [imageUrl]);
 
   return (
-    <div ref={mountRef} className="viewer-container" style={{ width, height, cursor: 'grab', position: 'relative' }}>
+    <div ref={mountRef} className="viewer-container" style={{ width, height, cursor: 'grab' }}>
       {loading && (
         <div style={{
           position: 'absolute', inset: 0, display: 'flex',
           alignItems: 'center', justifyContent: 'center', zIndex: 5,
-          background: '#07070f',
         }}>
           <div style={{ textAlign: 'center' }}>
             <div className="spinner" style={{ width: 40, height: 40, margin: '0 auto 16px' }} />
@@ -190,44 +154,6 @@ export default function PanoramaViewer({ imageUrl, hotspots = [], onHotspotClick
           </div>
         </div>
       )}
-
-      {/* 3D Hotspots Overlays */}
-      <div ref={hotspotsContainerRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 10, overflow: 'hidden' }}>
-        {hotspots.map((h, i) => (
-          <div 
-            key={h.id} 
-            className="hotspot-3d"
-            style={{ 
-              position: 'absolute', left: 0, top: 0, 
-              pointerEvents: 'auto', cursor: 'pointer',
-              display: 'none', flexDirection: 'column', alignItems: 'center', gap: 6,
-              transform: 'translate(-50%, -50%)',
-              transition: 'opacity 0.2s',
-            }}
-            onClick={(e) => { e.stopPropagation(); if (onHotspotClick) onHotspotClick(h.id, h.type); }}
-          >
-            <div style={{ 
-               width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', 
-               backdropFilter: 'blur(8px)', border: '2px solid white', 
-               display: 'flex', alignItems: 'center', justifyContent: 'center',
-               boxShadow: '0 4px 12px rgba(0,0,0,0.3)', color: 'white', fontWeight: 'bold'
-            }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                 <path d="M5 12h14"></path>
-                 <path d="m12 5 7 7-7 7"></path>
-              </svg>
-            </div>
-            <div style={{
-               background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
-               padding: '4px 10px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)',
-               fontSize: '0.75rem', fontWeight: 500, color: 'white', whiteSpace: 'nowrap',
-               pointerEvents: 'none'
-            }}>
-               {h.label}
-            </div>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }

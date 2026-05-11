@@ -46,35 +46,9 @@ export async function POST(request, { params }) {
 
     const panoramaBuffer = await sharp({
       create: { width: 4096, height: 2048, channels: 3, background: { r: 20, g: 20, b: 30 } }
-    }).composite(compositeOps).jpeg({ 
-      quality: 85,
-      progressive: true,
-      mozjpeg: true,
-      trellisQuantisation: true
-    }).toBuffer({ resolveWithObject: true });
+    }).composite(compositeOps).jpeg({ quality: 85 }).toBuffer();
 
-    // Check file size and compress further if needed
-    let compressedBuffer = panoramaBuffer.data;
-    const fileSizeMB = panoramaBuffer.info.size / (1024 * 1024);
-    
-    if (fileSizeMB > 4.0) { // Leave margin under 4.5MB limit
-      console.log(`Edge panorama size: ${fileSizeMB.toFixed(2)}MB, compressing further...`);
-      
-      // Apply aggressive compression for large files
-      compressedBuffer = await sharp({
-        create: { width: 4096, height: 2048, channels: 3, background: { r: 20, g: 20, b: 30 } }
-      }).composite(compositeOps).jpeg({ 
-        quality: 70,
-        progressive: true,
-        mozjpeg: true,
-        trellisQuantisation: true
-      }).toBuffer({ resolveWithObject: true });
-      
-      const compressedSizeMB = compressedBuffer.info.size / (1024 * 1024);
-      console.log(`Compressed edge panorama size: ${compressedSizeMB.toFixed(2)}MB`);
-    }
-
-    const uploadResult = await uploadImage(compressedBuffer, `xrplot/${worldId}/transitions`);
+    const uploadResult = await uploadImage(panoramaBuffer, `xrplot/${worldId}/transitions`);
 
     edge.transitionPanorama = uploadResult.url;
     edge.status = 'ready';

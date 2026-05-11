@@ -2,53 +2,49 @@
 
 import { useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
+<<<<<<< HEAD
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Globe, MapPin, Link2, Edit2, Trash2, Sparkles, Folder, History, MoreVertical, Copy, Move, ChevronRight, FolderPlus } from 'lucide-react';
+=======
+import { useState, useEffect, useCallback } from 'react';
+>>>>>>> b7b535f5abb9f831b9ea1a24893a77fde364eae4
 
 export default function DashboardPage() {
   const { user } = useUser();
   const router = useRouter();
   const [worlds, setWorlds] = useState([]);
-  const [folders, setFolders] = useState([]);
   const [loading, setLoading] = useState(true);
-  
-  // Modals state
   const [showCreate, setShowCreate] = useState(false);
+<<<<<<< HEAD
   const [showCreateFolder, setShowCreateFolder] = useState(null); // null or { parentId }
   const [showDelete, setShowDelete] = useState(null); // { type: 'world'|'folder', id }
   const [showMove, setShowMove] = useState(null); // { type: 'world'|'folder', id, currentParentId }
   const [showCopy, setShowCopy] = useState(null); // { type: 'world'|'folder', id }
   const [moving, setMoving] = useState(false);
   
+=======
+  const [showDelete, setShowDelete] = useState(null);
+>>>>>>> b7b535f5abb9f831b9ea1a24893a77fde364eae4
   const [newWorldName, setNewWorldName] = useState('');
-  const [newFolderName, setNewFolderName] = useState('');
   const [creating, setCreating] = useState(false);
-  const [activeMenu, setActiveMenu] = useState(null); // { type: 'world'|'folder', id }
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  const fetchWorlds = useCallback(async () => {
     try {
-      const [worldsRes, foldersRes] = await Promise.all([
-        fetch('/api/worlds'),
-        fetch('/api/folders')
-      ]);
-      
-      if (worldsRes.ok) setWorlds(await worldsRes.json());
-      if (foldersRes.ok) setFolders(await foldersRes.json());
+      const res = await fetch('/api/worlds');
+      if (res.ok) {
+        const data = await res.json();
+        setWorlds(data);
+      }
     } catch (err) {
-      console.error('Failed to fetch data:', err);
+      console.error('Failed to fetch worlds:', err);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  const rootWorlds = useMemo(() => worlds.filter(w => !w.isPredictionWorld && !w.folderId), [worlds]);
-  const rootFolders = useMemo(() => folders.filter(f => !f.parentId), [folders]);
-  const predictionWorlds = useMemo(() => worlds.filter(w => w.isPredictionWorld), [worlds]);
+    fetchWorlds();
+  }, [fetchWorlds]);
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -71,33 +67,7 @@ export default function DashboardPage() {
     }
   };
 
-  const handleCreateFolder = async (e) => {
-    e.preventDefault();
-    if (!newFolderName.trim()) return;
-    setCreating(true);
-    try {
-      const res = await fetch('/api/folders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          name: newFolderName.trim(),
-          parentId: showCreateFolder?.parentId || null
-        }),
-      });
-      if (res.ok) {
-        const folder = await res.json();
-        setFolders(prev => [folder, ...prev]);
-        setShowCreateFolder(null);
-        setNewFolderName('');
-      }
-    } catch (err) {
-      console.error('Failed to create folder:', err);
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const handleDeleteWorld = async (worldId) => {
+  const handleDelete = async (worldId) => {
     try {
       const res = await fetch(`/api/worlds/${worldId}`, { method: 'DELETE' });
       if (res.ok) {
@@ -109,6 +79,7 @@ export default function DashboardPage() {
     }
   };
 
+<<<<<<< HEAD
   const handleDeleteFolder = async (folderId) => {
     try {
       const res = await fetch(`/api/folders/${folderId}`, { method: 'DELETE' });
@@ -201,11 +172,14 @@ export default function DashboardPage() {
     }
   };
 
+=======
+>>>>>>> b7b535f5abb9f831b9ea1a24893a77fde364eae4
   const formatDate = (dateStr) => {
     const date = new Date(dateStr);
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
+<<<<<<< HEAD
   const renderWorldGrid = (worldsToRender, emptyMessage) => {
     if (worldsToRender.length === 0) {
       return (
@@ -278,31 +252,52 @@ export default function DashboardPage() {
     );
   };
 
+=======
+>>>>>>> b7b535f5abb9f831b9ea1a24893a77fde364eae4
   return (
     <>
       <div className="animated-bg" />
       
+<<<<<<< HEAD
+=======
+      {/* Navbar */}
+      <nav className="navbar">
+        <div className="navbar-brand">
+          🌍 <span>XRPlot</span>
+        </div>
+        <UserButton afterSignOutUrl="/sign-in" />
+      </nav>
+
+      {/* Dashboard */}
+>>>>>>> b7b535f5abb9f831b9ea1a24893a77fde364eae4
       <div className="dashboard">
         <div className="dashboard-header">
           <div>
-            <h1>Dashboard</h1>
+            <h1>Your Worlds</h1>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '4px' }}>
-              Welcome back{user?.firstName ? `, ${user.firstName}` : ''}! Manage your immersive worlds and predictions.
+              Welcome back{user?.firstName ? `, ${user.firstName}` : ''}! Build immersive 360° experiences.
             </p>
           </div>
           <div style={{ display: 'flex', gap: '12px' }}>
             <button
+<<<<<<< HEAD
               className="btn btn-secondary btn-lg"
               style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
               onClick={() => router.push('/prediction')}
+=======
+              className="btn btn-secondary"
+              onClick={() => router.push('/create-tour')}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+>>>>>>> b7b535f5abb9f831b9ea1a24893a77fde364eae4
             >
-              <Globe size={18} /> Decade 2.0
-            </button>
-            <button className="btn btn-ghost btn-lg" onClick={() => setShowCreateFolder({ parentId: null })} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <FolderPlus size={18} /> New Folder
+              🌐 Create Tour with AI
             </button>
             <button className="btn btn-primary btn-lg" onClick={() => setShowCreate(true)}>
+<<<<<<< HEAD
               Create New World
+=======
+              ✦ New World
+>>>>>>> b7b535f5abb9f831b9ea1a24893a77fde364eae4
             </button>
           </div>
         </div>
@@ -317,8 +312,9 @@ export default function DashboardPage() {
               </div>
             ))}
           </div>
-        ) : worlds.length === 0 && folders.length === 0 ? (
+        ) : worlds.length === 0 ? (
           <div className="empty-state">
+<<<<<<< HEAD
             <div className="empty-state-icon">
               <Globe size={64} strokeWidth={1.5} />
             </div>
@@ -382,26 +378,67 @@ export default function DashboardPage() {
                 {rootFolders.length === 0 && (
                   <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', fontStyle: 'italic' }}>No folders created yet. Organize your worlds by creating folders.</p>
                 )}
-              </div>
+=======
+            <div className="empty-state-icon">🌌</div>
+            <h2>No worlds yet</h2>
+            <p>Create your first 360° world and start building immersive experiences from your photos.</p>
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
+              <button
+                className="btn btn-secondary btn-lg"
+                onClick={() => router.push('/create-tour')}
+              >
+                🌐 Create Tour with AI Camera
+              </button>
+              <button className="btn btn-primary btn-lg" onClick={() => setShowCreate(true)}>
+                ✦ Create Empty World
+              </button>
             </div>
-
-            {/* Standard Worlds Section */}
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px' }}>
-                <Globe size={20} className="text-violet" />
-                <h2 style={{ fontSize: '1.4rem', fontWeight: 700, margin: 0 }}>Your Worlds</h2>
+          </div>
+        ) : (
+          <div className="worlds-grid">
+            {worlds.map(world => (
+              <div
+                key={world._id}
+                className="card card-glow world-card"
+                onClick={() => router.push(`/worlds/${world._id}`)}
+              >
+                <div className="world-card-thumb">
+                  {world.nodes?.some(n => n.panoramaUrl) ? (
+                    <img
+                      src={world.nodes.find(n => n.panoramaUrl)?.panoramaUrl}
+                      alt={world.name}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  ) : (
+                    '🌍'
+                  )}
+                </div>
+                <div className="world-card-name">{world.name}</div>
+                <div className="world-card-meta">
+                  <span>📍 {world.nodes?.length || 0} spaces</span>
+                  <span>🔗 {world.edges?.length || 0} connections</span>
+                </div>
+                <div className="world-card-meta" style={{ marginTop: 4 }}>
+                  <span>Updated {formatDate(world.updatedAt)}</span>
+                </div>
+                <div className="world-card-actions" onClick={e => e.stopPropagation()}>
+                  <button
+                    className="btn btn-secondary"
+                    style={{ flex: 1 }}
+                    onClick={() => router.push(`/worlds/${world._id}`)}
+                  >
+                    ✏️ Edit
+                  </button>
+                  <button
+                    className="btn btn-danger"
+                    onClick={() => setShowDelete(world._id)}
+                  >
+                    🗑️
+                  </button>
+                </div>
+>>>>>>> b7b535f5abb9f831b9ea1a24893a77fde364eae4
               </div>
-              {renderWorldGrid(rootWorlds, "No worlds at the root. Use folders to stay organized or create a new world.")}
-            </div>
-
-            {/* Predictions Section */}
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px' }}>
-                <History size={20} className="text-cyan" />
-                <h2 style={{ fontSize: '1.4rem', fontWeight: 700, margin: 0 }}>Decade 2.0 Predictions</h2>
-              </div>
-              {renderWorldGrid(predictionWorlds, "No predictions generated yet. Use the 'Decade 2.0' button to build future worlds.")}
-            </div>
+            ))}
           </div>
         )}
       </div>
@@ -411,7 +448,7 @@ export default function DashboardPage() {
         <div className="modal-overlay" onClick={() => setShowCreate(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2><Sparkles size={20} /> Create New World</h2>
+              <h2>✦ Create New World</h2>
               <button className="modal-close" onClick={() => setShowCreate(false)}>×</button>
             </div>
             <form onSubmit={handleCreate} className="create-world-form">
@@ -427,9 +464,11 @@ export default function DashboardPage() {
                 />
               </div>
               <div className="modal-actions">
-                <button type="button" className="btn btn-ghost" onClick={() => setShowCreate(false)}>Cancel</button>
+                <button type="button" className="btn btn-ghost" onClick={() => setShowCreate(false)}>
+                  Cancel
+                </button>
                 <button type="submit" className="btn btn-primary" disabled={creating || !newWorldName.trim()}>
-                  {creating ? 'Creating...' : 'Create World'}
+                  {creating ? <><span className="spinner" style={{ width: 16, height: 16 }} /> Creating...</> : '✦ Create World'}
                 </button>
               </div>
             </form>
@@ -437,6 +476,7 @@ export default function DashboardPage() {
         </div>
       )}
 
+<<<<<<< HEAD
       {/* Create Folder Modal */}
       {showCreateFolder && (
         <div className="modal-overlay" onClick={() => setShowCreateFolder(null)}>
@@ -527,25 +567,18 @@ export default function DashboardPage() {
         </div>
       )}
 
+=======
+>>>>>>> b7b535f5abb9f831b9ea1a24893a77fde364eae4
       {/* Delete Confirmation */}
       {showDelete && (
         <div className="modal-overlay" onClick={() => setShowDelete(null)}>
           <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 400 }}>
             <div className="confirm-dialog">
-              <h2 style={{ marginBottom: 'var(--space-md)' }}>
-                <Trash2 size={24} style={{ color: 'var(--red-light)' }} /> 
-                Delete {showDelete.type === 'world' ? 'World' : 'Folder'}?
-              </h2>
-              <p>
-                {showDelete.type === 'world' 
-                  ? 'This will permanently delete this world and all its images. This action cannot be undone.'
-                  : 'This will delete the folder. Items inside will be moved to the parent folder or root.'}
-              </p>
+              <h2 style={{ marginBottom: 'var(--space-md)' }}>🗑️ Delete World?</h2>
+              <p>This will permanently delete this world and all its images. This action cannot be undone.</p>
               <div className="modal-actions">
                 <button className="btn btn-ghost" onClick={() => setShowDelete(null)}>Cancel</button>
-                <button className="btn btn-danger" onClick={() => showDelete.type === 'world' ? handleDeleteWorld(showDelete.id) : handleDeleteFolder(showDelete.id)}>
-                  Delete {showDelete.type === 'world' ? 'Forever' : 'Folder'}
-                </button>
+                <button className="btn btn-danger" onClick={() => handleDelete(showDelete)}>Delete Forever</button>
               </div>
             </div>
           </div>

@@ -18,7 +18,7 @@ export async function POST(request, { params }) {
     const world = await World.findOne({ _id: worldId, userId });
     if (!world) return NextResponse.json({ error: 'World not found' }, { status: 404 });
 
-    const node = world.nodes.find(n => String(n.id) === String(nodeId));
+    const node = world.nodes.find(n => n.id === nodeId);
     if (!node) return NextResponse.json({ error: 'Node not found' }, { status: 404 });
 
     if (!node.images || node.images.length === 0) {
@@ -99,8 +99,12 @@ Respond ONLY in this exact JSON format:
     }
 
     // Update image classifications
+<<<<<<< HEAD
     if (analysis.classifications && Array.isArray(node.images)) {
       const VALID_DIRECTIONS = ['up', 'down', 'left', 'right', 'middle'];
+=======
+    if (analysis.classifications) {
+>>>>>>> b7b535f5abb9f831b9ea1a24893a77fde364eae4
       for (const cls of analysis.classifications) {
         if (node.images[cls.index]) {
           const currentCls = node.images[cls.index].classification?.toLowerCase();
@@ -110,7 +114,6 @@ Respond ONLY in this exact JSON format:
           }
         }
       }
-      world.markModified('nodes');
     }
 
     node.status = 'uploaded'; // Ready for stitching

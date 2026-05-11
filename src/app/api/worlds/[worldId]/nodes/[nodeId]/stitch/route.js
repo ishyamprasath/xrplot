@@ -19,7 +19,7 @@ export async function POST(request, { params }) {
     const world = await World.findOne({ _id: worldId, userId });
     if (!world) return NextResponse.json({ error: 'World not found' }, { status: 404 });
 
-    const node = world.nodes.find(n => String(n.id) === String(nodeId));
+    const node = world.nodes.find(n => n.id === nodeId);
     if (!node) return NextResponse.json({ error: 'Node not found' }, { status: 404 });
 
     if (!node.images || node.images.length === 0) {
@@ -77,42 +77,15 @@ export async function POST(request, { params }) {
         }
       }
 
-      // 3. Ensure proper dimensions and format using Sharp with compression
+      // 3. Ensure proper dimensions and format using Sharp
       const finalBuffer = await sharp(panoramaBuffer)
         .resize(4096, 2048, { fit: 'cover' })
-        .jpeg({ 
-          quality: 85,
-          progressive: true,
-          mozjpeg: true,
-          trellisQuantisation: true
-        })
-        .toBuffer({ resolveWithObject: true });
-
-      // 3.1. Check file size and compress further if needed
-      let compressedBuffer = finalBuffer.data;
-      const fileSizeMB = finalBuffer.info.size / (1024 * 1024);
-      
-      if (fileSizeMB > 4.0) { // Leave margin under 4.5MB limit
-        console.log(`Panorama size: ${fileSizeMB.toFixed(2)}MB, compressing further...`);
-        
-        // Apply aggressive compression for large files
-        compressedBuffer = await sharp(panoramaBuffer)
-          .resize(4096, 2048, { fit: 'cover' })
-          .jpeg({ 
-            quality: 70,
-            progressive: true,
-            mozjpeg: true,
-            trellisQuantisation: true
-          })
-          .toBuffer({ resolveWithObject: true });
-        
-        const compressedSizeMB = compressedBuffer.info.size / (1024 * 1024);
-        console.log(`Compressed panorama size: ${compressedSizeMB.toFixed(2)}MB`);
-      }
+        .jpeg({ quality: 90 })
+        .toBuffer();
 
       // 4. Upload finished masterpiece to Cloudinary
       const uploadResult = await uploadImage(
-        compressedBuffer || finalBuffer.data,
+        finalBuffer,
         `xrplot/${worldId}/panoramas`
       );
 

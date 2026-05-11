@@ -28,10 +28,6 @@ yarn-error.log*
 # local env files
 .env*.local
 .env
-.env.production
-service-account-key.json*
-service-account-key.json
-add_env_vars.ps1
 
 # vercel
 .vercel
@@ -40,7 +36,17 @@ add_env_vars.ps1
 *.tsbuildinfo
 next-env.d.ts
 
+<<<<<<< HEAD
 .vercel
 .env*.local
 
 .claude/
+=======
+# clerk configuration (can include secrets)
+/.clerk/
+
+# GCP Service Account key files — NEVER commit these
+gcp-key.json
+*-key.json
+*.service-account.json
+>>>>>>> b7b535f5abb9f831b9ea1a24893a77fde364eae4

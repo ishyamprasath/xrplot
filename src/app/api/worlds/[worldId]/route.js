@@ -31,7 +31,6 @@ export async function PUT(request, { params }) {
     const body = await request.json();
     
     await connectDB();
-    console.log("PUT request nodes:", JSON.stringify(body.nodes, null, 2));
     const world = await World.findOneAndUpdate(
       { _id: worldId, userId },
       { 

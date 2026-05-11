@@ -2,24 +2,29 @@
 
 import { memo } from 'react';
 import { BaseEdge, EdgeLabelRenderer, getBezierPath } from '@xyflow/react';
-import { Trash2 } from 'lucide-react';
 
-function ConnectionEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style = {}, data }) {
+function ConnectionEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data, style = {} }) {
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX, sourceY, sourcePosition,
     targetX, targetY, targetPosition,
   });
 
-  const handleDelete = (e) => {
-    e.stopPropagation();
-    window.dispatchEvent(new CustomEvent('xrplot-action', {
-      detail: { type: 'deleteEdge', edgeId: id }
-    }));
+  const dispatch = (type, detail = {}) => {
+    window.dispatchEvent(new CustomEvent('xrplot-action', { detail: { type, edgeId: id, ...detail } }));
   };
+
+  const hasImages = data?.transitionImages?.length > 0;
 
   return (
     <>
-      <BaseEdge path={edgePath} style={style} />
+      <BaseEdge
+        path={edgePath}
+        style={{
+          ...style,
+          strokeDasharray: hasImages ? 'none' : '8 4',
+          animation: hasImages ? 'none' : 'flowDash 1s linear infinite',
+        }}
+      />
       <EdgeLabelRenderer>
         <div
           style={{
@@ -30,40 +35,11 @@ function ConnectionEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition
           className="nodrag nopan"
         >
           <button
-            onClick={handleDelete}
-            style={{
-              width: 24,
-              height: 24,
-              borderRadius: '50%',
-              background: '#ffffff',
-              border: '1.5px solid #1a1a2e',
-              color: '#1a1a2e',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: 0,
-              transition: 'all 0.2s ease',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-              opacity: 0.7,
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.opacity = '1';
-              e.currentTarget.style.background = '#ef4444';
-              e.currentTarget.style.borderColor = '#ef4444';
-              e.currentTarget.style.color = '#fff';
-              e.currentTarget.style.transform = 'scale(1.2)';
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.opacity = '0.7';
-              e.currentTarget.style.background = '#ffffff';
-              e.currentTarget.style.borderColor = '#1a1a2e';
-              e.currentTarget.style.color = '#1a1a2e';
-              e.currentTarget.style.transform = 'scale(1)';
-            }}
-            title="Delete Connection"
+            className="edge-upload-btn"
+            onClick={() => dispatch('openEdgeUpload')}
+            title={hasImages ? `${data.transitionImages.length} transition photos` : 'Upload transition photos'}
           >
-            <Trash2 size={12} />
+            {hasImages ? '✓' : '📸'}
           </button>
         </div>
       </EdgeLabelRenderer>

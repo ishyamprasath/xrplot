@@ -1,7 +1,5 @@
 import mongoose from 'mongoose';
 
-const MONGO_URI = process.env.MONGO_URI;
-
 let cached = global.mongoose;
 
 if (!cached) {
@@ -9,14 +7,12 @@ if (!cached) {
 }
 
 async function connectDB() {
-  // Handle missing MONGO_URI for deployment
-  if (!MONGO_URI) {
-    console.log('MONGO_URI not found, using mock connection for deployment debugging');
-    return {
-      connection: { readyState: 1 },
-      model: () => ({}),
-      Schema: mongoose.Schema
-    };
+  const MONGO_URI = process.env.MONGO_URI;
+
+  if (!MONGO_URI || MONGO_URI.includes('your_user')) {
+    throw new Error(
+      'MONGO_URI is not configured. Please add your MongoDB connection string to .env.local'
+    );
   }
 
   if (cached.conn) {

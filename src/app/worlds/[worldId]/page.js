@@ -18,24 +18,13 @@ export default function WorldEditorPage() {
     try {
       const res = await fetch(`/api/worlds/${worldId}`);
       if (res.ok) {
-        const text = await res.text();
-        try {
-          const data = JSON.parse(text);
-          setWorld(data);
-        } catch (jsonErr) {
-          console.error('Invalid JSON response:', text.substring(0, 200));
-          console.error('JSON parse error:', jsonErr);
-          router.push('/dashboard');
-        }
+        const data = await res.json();
+        setWorld(data);
       } else {
-        console.error('API response not OK:', res.status, res.statusText);
-        const text = await res.text();
-        console.error('Response body:', text.substring(0, 200));
         router.push('/dashboard');
       }
     } catch (err) {
       console.error('Failed to fetch world:', err);
-      router.push('/dashboard');
     } finally {
       setLoading(false);
     }
@@ -54,19 +43,7 @@ export default function WorldEditorPage() {
         body: JSON.stringify(updatedData),
       });
       if (res.ok) {
-        const text = await res.text();
-        try {
-          const data = JSON.parse(text);
-          setWorld(data);
-          setLastSaved(new Date());
-        } catch (jsonErr) {
-          console.error('Invalid JSON response on save:', text.substring(0, 200));
-          console.error('JSON parse error:', jsonErr);
-        }
-      } else {
-        console.error('Save API response not OK:', res.status, res.statusText);
-        const text = await res.text();
-        console.error('Save response body:', text.substring(0, 200));
+        setLastSaved(new Date());
       }
     } catch (err) {
       console.error('Failed to save world:', err);
