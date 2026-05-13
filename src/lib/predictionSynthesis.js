@@ -27,6 +27,9 @@ async function generateImageWithOpenRouter(prompt, { maxRetries = 3 } = {}) {
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
       const data = await res.json();
       const raw = data.choices?.[0]?.message?.content || '';
+      
+      console.log(`[OpenRouter] Raw response length: ${raw.length}, preview: ${raw.slice(0, 300)}`);
+      console.log(`[OpenRouter] Full response keys:`, Object.keys(data));
 
       const md = raw.match(/!\[.*?\]\((data:image\/(?:png|jpeg|webp);base64,([A-Za-z0-9+/=]+))\)/);
       if (md?.[2]) return Buffer.from(md[2], 'base64');
