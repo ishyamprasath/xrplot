@@ -1,4 +1,62 @@
-import { generateTextWithGemini } from './nanobanana';
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const TEXT_MODEL = 'nvidia/nemotron-3-nano-30b-a3b';
+
+async function callOpenRouterText(prompt, maxTokens = 2048, maxRetries = 3) {
+  if (!OPENROUTER_API_KEY) {
+    throw new Error('OPENROUTER_API_KEY is not configured');
+  }
+
+  let lastError;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[OpenRouter] Text attempt ${attempt}/${maxRetries} with ${TEXT_MODEL}`);
+
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+          'X-Title': 'XRPlot',
+        },
+        body: JSON.stringify({
+          model: TEXT_MODEL,
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: maxTokens,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      const choice = data.choices?.[0];
+      const message = choice?.message;
+      const text = message?.content;
+
+      console.log('[OpenRouter] Response keys:', Object.keys(data));
+      if (text != null && typeof text === 'string' && text.trim().length > 0) {
+        console.log(`[OpenRouter] Text response received, length: ${text.length}`);
+        return text;
+      }
+
+      console.warn(`[OpenRouter] Empty/null content. finish_reason: ${choice?.finish_reason}, model: ${data.model}`);
+      throw new Error(`Empty or null content from model (finish_reason: ${choice?.finish_reason || 'unknown'})`);
+    } catch (err) {
+      lastError = err;
+      console.error(`[OpenRouter] Attempt ${attempt} failed:`, err.message);
+      if (attempt < maxRetries) {
+        const delay = attempt * 2000;
+        console.log(`[OpenRouter] Retrying in ${delay}ms...`);
+        await new Promise(r => setTimeout(r, delay));
+      }
+    }
+  }
+
+  throw new Error(`OpenRouter text call failed after ${maxRetries} attempts: ${lastError.message}`);
+}
 
 // Generate comprehensive analysis using OpenRouter
 export async function generateComprehensiveAnalysis(placeName, lat, lng) {
