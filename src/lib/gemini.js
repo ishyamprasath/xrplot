@@ -1,10 +1,69 @@
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const TEXT_MODEL = 'nvidia/nemotron-3-super-120b-a12b:free';
+
+async function callOpenRouterText(prompt, maxTokens = 2048, maxRetries = 3) {
+  if (!OPENROUTER_API_KEY) {
+    throw new Error('OPENROUTER_API_KEY is not configured');
+  }
+
+  let lastError;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[OpenRouter] Text attempt ${attempt}/${maxRetries} with ${TEXT_MODEL}`);
+
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+          'X-Title': 'XRPlot',
+        },
+        body: JSON.stringify({
+          model: TEXT_MODEL,
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: maxTokens,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      const choice = data.choices?.[0];
+      const message = choice?.message;
+      const text = message?.content;
+
+      console.log('[OpenRouter] Response keys:', Object.keys(data));
+      if (text != null && typeof text === 'string' && text.trim().length > 0) {
+        console.log(`[OpenRouter] Text response received, length: ${text.length}`);
+        return text;
+      }
+
+      // Defensive: some models return null content or finish_reason issues
+      console.warn(`[OpenRouter] Empty/null content. finish_reason: ${choice?.finish_reason}, model: ${data.model}`);
+      throw new Error(`Empty or null content from model (finish_reason: ${choice?.finish_reason || 'unknown'})`);
+    } catch (err) {
+      lastError = err;
+      console.error(`[OpenRouter] Attempt ${attempt} failed:`, err.message);
+      if (attempt < maxRetries) {
+        const delay = attempt * 2000;
+        console.log(`[OpenRouter] Retrying in ${delay}ms...`);
+        await new Promise(r => setTimeout(r, delay));
+      }
+    }
+  }
+
+  throw new Error(`OpenRouter text call failed after ${maxRetries} attempts: ${lastError.message}`);
+}
 
 // Generate comprehensive analysis using OpenRouter
 export async function generateComprehensiveAnalysis(placeName, lat, lng) {
   try {
     console.log(`[OpenRouter] Analyzing ${placeName} at coordinates (${lat}, ${lng})`);
-    
+
     const prompt = `You are an expert analyst specializing in India's economic development and urban planning. Analyze the following:
 
 1. India's GDP and Economic Context:
@@ -28,58 +87,20 @@ export async function generateComprehensiveAnalysis(placeName, lat, lng) {
 
 Provide detailed insights with specific data points and realistic projections for 2036. Focus on practical, achievable developments rather than overly optimistic scenarios.`;
 
-    console.log('[OpenRouter] Sending request to openrouter/auto...');
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-        "X-Title": "XRPlot"
-      },
-      body: JSON.stringify({
-        model: "openrouter/auto",
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 2048
-      })
-    });
-    
-    console.log('[OpenRouter] Raw response status:', response.status);
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[OpenRouter] API error:', errorText);
-      return {
-        success: false,
-        error: `OpenRouter API error ${response.status}: ${errorText}`,
-        rawResponse: errorText.slice(0, 500)
-      };
-    }
-
-    const data = await response.json();
-    const text = data.choices?.[0]?.message?.content || '';
-    console.log('[OpenRouter] Raw result:', JSON.stringify(data).slice(0, 300));
-
-    if (text) {
-      console.log(`[OpenRouter] Analysis completed for ${placeName}`);
-      return {
-        success: true,
-        analysis: text,
-        gdpInsights: extractGDPInsights(text),
-        locationInsights: extractLocationInsights(text)
-      };
-    }
+    const text = await callOpenRouterText(prompt, 2048, 3);
+    console.log(`[OpenRouter] Analysis completed for ${placeName}`);
 
     return {
-      success: false,
-      error: "Failed to generate analysis - no text in response",
-      rawResponse: JSON.stringify(data).slice(0, 500)
+      success: true,
+      analysis: text,
+      gdpInsights: extractGDPInsights(text),
+      locationInsights: extractLocationInsights(text),
     };
   } catch (error) {
-    console.error(`[OpenRouter] Error analyzing ${placeName}:`, error);
+    console.error(`[OpenRouter] Error analyzing ${placeName}:`, error.message);
     return {
       success: false,
-      error: error.message || 'Unknown error during analysis'
+      error: error.message || 'Unknown error during analysis',
     };
   }
 }
@@ -106,7 +127,8 @@ function extractLocationInsights(response) {
 
 // Generate realistic 10-year future projection prompts
 export async function generateFutureProjectionPrompt(placeName, currentInsights, gdpInsights, locationInsights) {
-  const prompt = `Based on the following analysis of ${placeName}, generate a realistic 10-year projection for 2036:
+  try {
+    const prompt = `Based on the following analysis of ${placeName}, generate a realistic 10-year projection for 2036:
 
 Current Analysis:
 ${currentInsights}
@@ -127,46 +149,20 @@ Requirements:
 
 Generate a detailed projection that shows how ${placeName} will realistically evolve by 2036, avoiding overly optimistic or sci-fi scenarios. Focus on practical, visible changes that residents would actually experience.`;
 
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-      "X-Title": "XRPlot"
-    },
-    body: JSON.stringify({
-      model: "openrouter/auto",
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 2048
-    })
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    return {
-      success: false,
-      error: `OpenRouter API error ${response.status}: ${errorText}`,
-      rawResponse: errorText.slice(0, 500)
-    };
-  }
-
-  const data = await response.json();
-  const text = data.choices?.[0]?.message?.content || '';
-
-  if (text) {
+    const text = await callOpenRouterText(prompt, 2048, 3);
     console.log(`[OpenRouter] Generated projection for ${placeName}`);
+
     return {
       success: true,
-      projection: text
+      projection: text,
+    };
+  } catch (error) {
+    console.error(`[OpenRouter] Error generating projection for ${placeName}:`, error.message);
+    return {
+      success: false,
+      error: error.message || 'Failed to generate projection',
     };
   }
-
-  return {
-    success: false,
-    error: "Failed to generate projection - no text in response",
-    rawResponse: JSON.stringify(data).slice(0, 500)
-  };
 }
 
 export {
