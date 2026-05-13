@@ -1,11 +1,9 @@
-import { GoogleGenAI } from "@google/genai";
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
-// Generate comprehensive analysis using Gemini 3 Flash Preview
+// Generate comprehensive analysis using OpenRouter
 export async function generateComprehensiveAnalysis(placeName, lat, lng) {
   try {
-    console.log(`[Gemini] Analyzing ${placeName} at coordinates (${lat}, ${lng})`);
+    console.log(`[OpenRouter] Analyzing ${placeName} at coordinates (${lat}, ${lng})`);
     
     const prompt = `You are an expert analyst specializing in India's economic development and urban planning. Analyze the following:
 
@@ -30,32 +28,55 @@ export async function generateComprehensiveAnalysis(placeName, lat, lng) {
 
 Provide detailed insights with specific data points and realistic projections for 2036. Focus on practical, achievable developments rather than overly optimistic scenarios.`;
 
-    console.log('[Gemini] Sending request to gemini-3-flash-preview...');
-    const result = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    console.log('[OpenRouter] Sending request to openrouter/auto...');
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+        "X-Title": "XRPlot"
+      },
+      body: JSON.stringify({
+        model: "openrouter/auto",
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 2048
+      })
     });
-    console.log('[Gemini] Raw result:', JSON.stringify(result).slice(0, 300));
+    
+    console.log('[OpenRouter] Raw response status:', response.status);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[OpenRouter] API error:', errorText);
+      return {
+        success: false,
+        error: `OpenRouter API error ${response.status}: ${errorText}`,
+        rawResponse: errorText.slice(0, 500)
+      };
+    }
 
-    if (result.text) {
-      console.log(`[Gemini] Analysis completed for ${placeName}`);
+    const data = await response.json();
+    const text = data.choices?.[0]?.message?.content || '';
+    console.log('[OpenRouter] Raw result:', JSON.stringify(data).slice(0, 300));
+
+    if (text) {
+      console.log(`[OpenRouter] Analysis completed for ${placeName}`);
       return {
         success: true,
-        analysis: result.text,
-        gdpInsights: extractGDPInsights(result.text),
-        locationInsights: extractLocationInsights(result.text)
+        analysis: text,
+        gdpInsights: extractGDPInsights(text),
+        locationInsights: extractLocationInsights(text)
       };
     }
 
     return {
       success: false,
       error: "Failed to generate analysis - no text in response",
-      rawResponse: JSON.stringify(result).slice(0, 500)
+      rawResponse: JSON.stringify(data).slice(0, 500)
     };
   } catch (error) {
-    console.error(`[Gemini] Error analyzing ${placeName}:`, error);
-    console.error(`[Gemini] API Key exists:`, !!process.env.GEMINI_API_KEY);
-    console.error(`[Gemini] Error details:`, error?.response?.data || error?.toString?.());
+    console.error(`[OpenRouter] Error analyzing ${placeName}:`, error);
     return {
       success: false,
       error: error.message || 'Unknown error during analysis'
@@ -106,23 +127,45 @@ Requirements:
 
 Generate a detailed projection that shows how ${placeName} will realistically evolve by 2036, avoiding overly optimistic or sci-fi scenarios. Focus on practical, visible changes that residents would actually experience.`;
 
-  const result = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+      "X-Title": "XRPlot"
+    },
+    body: JSON.stringify({
+      model: "openrouter/auto",
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 2048
+    })
   });
 
-  if (result.text) {
-    console.log(`[Gemini] Generated projection for ${placeName}`);
+  if (!response.ok) {
+    const errorText = await response.text();
+    return {
+      success: false,
+      error: `OpenRouter API error ${response.status}: ${errorText}`,
+      rawResponse: errorText.slice(0, 500)
+    };
+  }
+
+  const data = await response.json();
+  const text = data.choices?.[0]?.message?.content || '';
+
+  if (text) {
+    console.log(`[OpenRouter] Generated projection for ${placeName}`);
     return {
       success: true,
-      projection: result.text
+      projection: text
     };
   }
 
   return {
     success: false,
     error: "Failed to generate projection - no text in response",
-    rawResponse: JSON.stringify(result).slice(0, 500)
+    rawResponse: JSON.stringify(data).slice(0, 500)
   };
 }
 

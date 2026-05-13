@@ -3,12 +3,61 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 
+// Generate a procedural gradient texture as fallback so the user never sees a black screen
+function createFallbackTexture() {
+  const size = 1024;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size / 2;
+  const ctx = canvas.getContext('2d');
+
+  // Create a pleasant sky-like gradient
+  const grd = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  grd.addColorStop(0, '#0f172a');
+  grd.addColorStop(0.4, '#1e293b');
+  grd.addColorStop(0.6, '#334155');
+  grd.addColorStop(1, '#0f172a');
+  ctx.fillStyle = grd;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Add some subtle grid lines to suggest a "virtual space"
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < canvas.width; i += 64) {
+    ctx.beginPath();
+    ctx.moveTo(i, 0);
+    ctx.lineTo(i, canvas.height);
+    ctx.stroke();
+  }
+  for (let i = 0; i < canvas.height; i += 64) {
+    ctx.beginPath();
+    ctx.moveTo(0, i);
+    ctx.lineTo(canvas.width, i);
+    ctx.stroke();
+  }
+
+  // Add centered error text
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  ctx.font = 'bold 48px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('Panorama Unavailable', canvas.width / 2, canvas.height / 2 - 30);
+  ctx.font = '28px sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.fillText('Image failed to load or is still processing', canvas.width / 2, canvas.height / 2 + 30);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.mapping = THREE.EquirectangularReflectionMapping;
+  return texture;
+}
+
 export default function PanoramaViewer({ imageUrl, hotspots = [], onHotspotClick, width = '100%', height = '100%' }) {
   const mountRef = useRef(null);
   const hotspotsContainerRef = useRef(null);
   const hotspotsRef = useRef(hotspots);
   useEffect(() => { hotspotsRef.current = hotspots; }, [hotspots]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     if (!mountRef.current || !imageUrl) return;
@@ -25,16 +74,19 @@ export default function PanoramaViewer({ imageUrl, hotspots = [], onHotspotClick
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(containerWidth, containerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setClearColor(0x07070f, 1);
     container.appendChild(renderer.domElement);
 
     // Create sphere
     const geometry = new THREE.SphereGeometry(500, 60, 40);
     geometry.scale(-1, 1, 1);
 
+    let sphere = null;
+
     // Load texture directly
     const textureLoader = new THREE.TextureLoader();
     textureLoader.setCrossOrigin('anonymous');
-    
+
     let animationFrameId;
 
     textureLoader.load(
@@ -42,14 +94,21 @@ export default function PanoramaViewer({ imageUrl, hotspots = [], onHotspotClick
       (texture) => {
         texture.mapping = THREE.EquirectangularReflectionMapping;
         const material = new THREE.MeshBasicMaterial({ map: texture });
-        const sphere = new THREE.Mesh(geometry, material);
+        sphere = new THREE.Mesh(geometry, material);
         scene.add(sphere);
         setLoading(false);
+        setError(false);
       },
       undefined,
       (error) => {
         console.error('Failed to load panorama texture:', error);
+        // Add fallback sphere so user never sees pure black
+        const fallbackTexture = createFallbackTexture();
+        const fallbackMaterial = new THREE.MeshBasicMaterial({ map: fallbackTexture });
+        sphere = new THREE.Mesh(geometry, fallbackMaterial);
+        scene.add(sphere);
         setLoading(false);
+        setError(true);
       }
     );
 
@@ -170,6 +229,11 @@ export default function PanoramaViewer({ imageUrl, hotspots = [], onHotspotClick
       window.removeEventListener('resize', handleResize);
       renderer.dispose();
       geometry.dispose();
+      if (sphere) {
+        sphere.material?.map?.dispose();
+        sphere.material?.dispose();
+        sphere.geometry?.dispose();
+      }
       if (container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
       }
@@ -188,6 +252,18 @@ export default function PanoramaViewer({ imageUrl, hotspots = [], onHotspotClick
             <div className="spinner" style={{ width: 40, height: 40, margin: '0 auto 16px' }} />
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Loading panorama...</p>
           </div>
+        </div>
+      )}
+
+      {error && !loading && (
+        <div style={{
+          position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)',
+          background: 'rgba(220, 38, 38, 0.9)', color: 'white',
+          padding: '8px 16px', borderRadius: 8, fontSize: '0.8rem',
+          zIndex: 20, pointerEvents: 'none',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+        }}>
+          Panorama failed to load. Try re-stitching or check your connection.
         </div>
       )}
 

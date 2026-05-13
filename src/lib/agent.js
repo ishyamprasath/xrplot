@@ -1,10 +1,8 @@
-import { GoogleGenAI } from '@google/genai';
 import connectDB from './db';
 import World from '@/models/World';
 import Folder from '@/models/Folder';
 
-const apiKey = process.env.GEMINI_API_KEY;
-const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
 // In-memory idempotency store for prediction requests (prevents duplicate worlds)
 // Key: userId + location, Value: { timestamp, worldId, status }
@@ -46,7 +44,7 @@ function getRecentPrediction(userId, location) {
   return predictionRequestStore.get(key);
 }
 
-const MODEL_NAME = 'gemini-3-flash-preview';
+const MODEL_NAME = 'nvidia/nemotron-3-super-120b-a12b:free';
 
 function getBaseUrl() {
   if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL;
@@ -600,28 +598,31 @@ RULES:
 `;
 
 export async function runAgent({ userId, messages }) {
-  if (!ai) {
+  if (!OPENROUTER_API_KEY) {
     return {
-      text: 'Gemini API key is not configured. Please set GEMINI_API_KEY in your environment.',
+      text: 'OpenRouter API key is not configured. Please set OPENROUTER_API_KEY in your environment.',
       functionName: null,
       functionArgs: null,
       functionResponse: null,
     };
   }
 
-  const contents = messages.map(m => {
-    // Sanitize old-format functionResponse messages stored in DB
-    if (m.functionResponse) {
+  // Convert messages to OpenRouter format
+  const openRouterMessages = [
+    { role: 'system', content: SYSTEM_PROMPT },
+    ...messages.map(m => {
+      if (m.functionResponse) {
+        return {
+          role: 'user',
+          content: `Function ${m.functionName} result: ${JSON.stringify(m.functionResponse)}`,
+        };
+      }
       return {
-        role: 'user',
-        parts: [{ text: `Function ${m.functionName} result: ${JSON.stringify(m.functionResponse)}` }],
+        role: m.role === 'user' ? 'user' : 'assistant',
+        content: m.content || '',
       };
-    }
-    return {
-      role: m.role === 'user' ? 'user' : 'model',
-      parts: [{ text: m.content || '' }],
-    };
-  });
+    }),
+  ];
 
   let maxTurns = 10;
   let lastText = '';
@@ -630,65 +631,118 @@ export async function runAgent({ userId, messages }) {
 
   while (maxTurns > 0) {
     maxTurns--;
-    const result = await ai.models.generateContent({
-      model: MODEL_NAME,
-      contents,
-      config: {
-        tools: [{ functionDeclarations: tools }],
-        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+    
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+        "X-Title": "XRPlot"
       },
+      body: JSON.stringify({
+        model: MODEL_NAME,
+        messages: openRouterMessages,
+        tools: tools.map(t => ({
+          type: "function",
+          function: {
+            name: t.name,
+            description: t.description,
+            parameters: t.parameters
+          }
+        })),
+        reasoning: { enabled: true }
+      })
     });
 
-    const candidate = result.candidates?.[0];
-    const parts = candidate?.content?.parts || [];
-    const functionCallParts = parts.filter(p => p.functionCall);
-    const textPart = parts.map(p => p.text).filter(Boolean).join('\n');
-
-    if (textPart) {
-      lastText += (lastText ? '\n\n' : '') + textPart;
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`OpenRouter API error ${response.status}: ${errorText}`);
     }
 
-    if (functionCallParts.length === 0) {
+    const data = await response.json();
+    const choice = data.choices?.[0];
+    const message = choice?.message;
+    const content = message?.content || '';
+    const toolCalls = message?.tool_calls || [];
+
+    if (content) {
+      lastText += (lastText ? '\n\n' : '') + content;
+    }
+
+    if (toolCalls.length === 0) {
       break;
     }
 
-    // Handle first function call (Gemini usually does one per turn or we handle sequentially)
-    const callPart = functionCallParts[0];
-    const call = callPart.functionCall;
-    const fn = functionMap[call.name];
+    // --- Handle all tool calls in this turn ---
+    const toolResults = [];
 
-    if (!fn) {
-      const errorMsg = `Unknown function: ${call.name}`;
-      lastText += (lastText ? '\n\n' : '') + errorMsg;
-      break;
+    for (const toolCall of toolCalls) {
+      const fn = functionMap[toolCall.function.name];
+
+      if (!fn) {
+        const errorMsg = `Unknown function: ${toolCall.function.name}`;
+        console.error(`[Agent] ${errorMsg}`);
+        toolResults.push({
+          tool_call_id: toolCall.id,
+          role: 'tool',
+          content: JSON.stringify({ error: errorMsg }),
+        });
+        lastText += (lastText ? '\n\n' : '') + errorMsg;
+        continue;
+      }
+
+      // CRITICAL FIX: toolCall.function.arguments is a JSON string, NOT an object.
+      let parsedArgs = {};
+      try {
+        parsedArgs = JSON.parse(toolCall.function.arguments || '{}');
+      } catch (parseErr) {
+        console.error(`[Agent] Failed to parse tool arguments for ${toolCall.function.name}:`, toolCall.function.arguments, parseErr.message);
+        toolResults.push({
+          tool_call_id: toolCall.id,
+          role: 'tool',
+          content: JSON.stringify({ error: 'Invalid tool arguments JSON' }),
+        });
+        continue;
+      }
+
+      const args = { ...parsedArgs, userId };
+      let toolResult;
+      try {
+        console.log(`[Agent] Executing tool: ${toolCall.function.name}`, args);
+        toolResult = await fn(args);
+        actionsTaken.push(toolCall.function.name);
+        console.log(`[Agent] Tool ${toolCall.function.name} result:`, toolResult);
+      } catch (err) {
+        console.error(`[Agent] Tool ${toolCall.function.name} failed:`, err.message);
+        toolResult = { error: err.message };
+      }
+
+      // Track the LAST successful tool for the frontend
+      lastTool = {
+        functionName: toolCall.function.name,
+        functionArgs: parsedArgs,
+        functionResponse: toolResult,
+      };
+
+      toolResults.push({
+        tool_call_id: toolCall.id,
+        role: 'tool',
+        content: JSON.stringify(toolResult),
+      });
     }
 
-    const args = { ...call.args, userId };
-    let toolResult;
-    try {
-      toolResult = await fn(args);
-      actionsTaken.push(call.name);
-    } catch (err) {
-      toolResult = { error: err.message };
+    // Add assistant message with tool calls (content can be null when only tool calls)
+    openRouterMessages.push({
+      role: 'assistant',
+      content: content || null,
+      tool_calls: toolCalls,
+    });
+
+    // Add all tool results
+    for (const tr of toolResults) {
+      openRouterMessages.push(tr);
     }
-
-    lastTool = {
-      functionName: call.name,
-      functionArgs: call.args,
-      functionResponse: toolResult,
-    };
-
-    // Add model function call to contents
-    contents.push({
-      role: 'model',
-      parts: [callPart],
-    });
-
-    // Add function result as text
-    contents.push({
-      role: 'user',
-      parts: [{ text: `Function ${call.name} result: ${JSON.stringify(toolResult)}` }],
-    });
   }
 
   if (!lastText && actionsTaken.length > 0) {

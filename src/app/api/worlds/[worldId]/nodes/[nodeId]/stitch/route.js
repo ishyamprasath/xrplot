@@ -3,10 +3,156 @@ import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import World from '@/models/World';
 import { uploadImage } from '@/lib/cloudinary';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import sharp from 'sharp';
+import { generateImageWithGemini } from '@/lib/nanobanana';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const PANORAMA_WIDTH = 4096;
+const PANORAMA_HEIGHT = 2048;
+const MAX_UPLOAD_MB = 4.0;
+
+/**
+ * Preprocess input images: normalize size, validate, convert to base64.
+ * Gemini works best with consistent, reasonably-sized inputs.
+ */
+async function preprocessImages(imageUrls) {
+  const processed = [];
+  for (const url of imageUrls) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        console.warn(`[Stitch] Failed to fetch image ${url}: ${response.status}`);
+        continue;
+      }
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+
+      // Validate it's a real image
+      const meta = await sharp(buffer).metadata();
+      if (!meta.width || !meta.height) {
+        console.warn(`[Stitch] Invalid image at ${url}`);
+        continue;
+      }
+
+      // Normalize to 1024px wide max, good quality JPEG for Gemini
+      const normalized = await sharp(buffer)
+        .resize(1024, 1024, { fit: 'inside', withoutEnlargement: false })
+        .jpeg({ quality: 90, progressive: true })
+        .toBuffer();
+
+      processed.push({
+        base64: normalized.toString('base64'),
+        mimeType: 'image/jpeg',
+        originalWidth: meta.width,
+        originalHeight: meta.height,
+      });
+      console.log(`[Stitch] Preprocessed image ${url}: ${meta.width}x${meta.height} -> 1024x1024`);
+    } catch (e) {
+      console.warn(`[Stitch] Failed to process image ${url}:`, e.message);
+    }
+  }
+  return processed;
+}
+
+/**
+ * Build a rich, detailed prompt for Gemini to generate a high-quality 360 panorama.
+ */
+function buildPanoramaPrompt(node, imageCount) {
+  const locationHint = node.label || node.name || 'this location';
+  return `You are an expert 360° panorama photographer and AI image synthesizer.
+
+TASK: Create a single, seamless, photorealistic equirectangular 360-degree panorama image (2:1 aspect ratio, 4096x2048) of "${locationHint}".
+
+INPUT: You have been provided with ${imageCount} real photographs of the same physical space taken from different angles. Use these as reference for:
+- The exact architecture, colors, textures, and materials
+- The spatial layout and proportions of the environment
+- The lighting conditions and time of day
+- Key objects, furniture, vegetation, or structures present
+
+REQUIREMENTS:
+1. Output MUST be a full 360° equirectangular panorama (seamless left-right wrap, no visible edges).
+2. Blend all perspectives into one coherent space with perfect perspective continuity.
+3. Maintain photorealistic detail: correct shadows, reflections, natural lighting, and depth.
+4. Do NOT invent objects that are not in the source photos. Stay faithful to the actual space.
+5. Fix any exposure differences between source views so the final panorama has uniform lighting.
+6. Fill in gaps between views using logical architectural inference, not imagination.
+7. Ensure the horizon is perfectly level and the floor/ground is consistent.
+8. No text, watermarks, UI elements, or borders.
+9. The output must be a single complete image, not a collage or grid.
+
+Return only the generated panoramic image.`;
+}
+
+/**
+ * Create a fallback panorama using sharp if the AI model fails completely.
+ * This stitches images side-by-side and scales to panorama dimensions.
+ */
+async function createFallbackPanorama(imageBuffers) {
+  console.log('[Stitch] Creating sharp fallback panorama...');
+  try {
+    const composites = [];
+    const targetSliceWidth = Math.floor(PANORAMA_WIDTH / imageBuffers.length);
+    const targetSliceHeight = PANORAMA_HEIGHT;
+
+    for (let i = 0; i < imageBuffers.length; i++) {
+      const slice = await sharp(imageBuffers[i])
+        .resize(targetSliceWidth, targetSliceHeight, { fit: 'cover' })
+        .toBuffer();
+      composites.push({
+        input: slice,
+        left: i * targetSliceWidth,
+        top: 0,
+      });
+    }
+
+    const canvas = sharp({
+      create: {
+        width: PANORAMA_WIDTH,
+        height: PANORAMA_HEIGHT,
+        channels: 3,
+        background: { r: 20, g: 20, b: 30 },
+      },
+    });
+
+    const fallbackBuffer = await canvas.composite(composites).jpeg({
+      quality: 85,
+      progressive: true,
+      mozjpeg: true,
+    }).toBuffer();
+
+    console.log(`[Stitch] Fallback panorama created: ${fallbackBuffer.length} bytes`);
+    return fallbackBuffer;
+  } catch (e) {
+    console.error('[Stitch] Fallback panorama failed:', e);
+    throw e;
+  }
+}
+
+/**
+ * Compress panorama to fit under upload limit while keeping quality high.
+ */
+async function compressPanorama(buffer) {
+  let quality = 92;
+  let result = await sharp(buffer)
+    .resize(PANORAMA_WIDTH, PANORAMA_HEIGHT, { fit: 'cover' })
+    .jpeg({ quality, progressive: true, mozjpeg: true, trellisQuantisation: true })
+    .toBuffer({ resolveWithObject: true });
+
+  let sizeMB = result.info.size / (1024 * 1024);
+  console.log(`[Stitch] Panorama initial size: ${sizeMB.toFixed(2)}MB (quality ${quality})`);
+
+  // Gradually reduce quality if oversized
+  while (sizeMB > MAX_UPLOAD_MB && quality > 50) {
+    quality -= 8;
+    result = await sharp(buffer)
+      .resize(PANORAMA_WIDTH, PANORAMA_HEIGHT, { fit: 'cover' })
+      .jpeg({ quality, progressive: true, mozjpeg: true, trellisQuantisation: true })
+      .toBuffer({ resolveWithObject: true });
+    sizeMB = result.info.size / (1024 * 1024);
+    console.log(`[Stitch] Compressed to ${sizeMB.toFixed(2)}MB (quality ${quality})`);
+  }
+
+  return result.data;
+}
 
 export async function POST(request, { params }) {
   try {
@@ -28,107 +174,76 @@ export async function POST(request, { params }) {
 
     node.status = 'stitching';
     await world.save();
+    console.log(`[Stitch] Starting stitch for node ${nodeId} with ${node.images.length} images`);
 
     try {
-      // 1. Fetch images and convert to base64 for Gemini (NanoBanana) Image Model
-      const imageParts = [];
-      for (const img of node.images) {
-        try {
-          const response = await fetch(img.url);
-          const arrayBuffer = await response.arrayBuffer();
-          const base64 = Buffer.from(arrayBuffer).toString('base64');
-          imageParts.push({ inlineData: { data: base64, mimeType: 'image/jpeg' } });
-        } catch (e) {
-          console.warn('Failed to fetch image:', img.url);
-        }
+      // 1. Fetch and preprocess all input images
+      const imageUrls = node.images.map(img => img.url);
+      const inputImages = await preprocessImages(imageUrls);
+
+      if (inputImages.length === 0) {
+        throw new Error('Failed to retrieve or process any images for stitching');
       }
 
-      if (imageParts.length === 0) {
-        return NextResponse.json({ error: 'Failed to retrieve images for stitching' }, { status: 400 });
+      // 2. Generate 360 Panorama using Gemini NanoBanana
+      const prompt = buildPanoramaPrompt(node, inputImages.length);
+      let panoramaBuffer = null;
+      let usedFallback = false;
+
+      try {
+        panoramaBuffer = await generateImageWithGemini(prompt, inputImages, {
+          maxRetries: 3,
+          validate: true,
+          normalize: true,
+          targetWidth: PANORAMA_WIDTH,
+          targetHeight: PANORAMA_HEIGHT,
+        });
+        console.log('[Stitch] AI panorama generated successfully');
+      } catch (aiErr) {
+        console.error('[Stitch] AI generation failed:', aiErr.message);
+        console.log('[Stitch] Falling back to sharp-based panorama...');
+
+        // Fallback: create a panorama from source images using sharp
+        const rawBuffers = inputImages.map(img => Buffer.from(img.base64, 'base64'));
+        panoramaBuffer = await createFallbackPanorama(rawBuffers);
+        usedFallback = true;
       }
 
-      // 2. Generate 360 Panorama using Gemini 3.1 Flash Image Preview (NanoBanana)
-      const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-image-preview' });
-      
-      const prompt = `You are a professional image generation and panorama stitching engine. Using the provided photos of a physical space, generate a seamless, incredibly photorealistic equirectangular 360-degree panorama that perfectly blends these scenes together. Ensure the lighting, perspectives, and geometry connect flawlessly to create a 360 degree looping space suitable for VR.`;
-
-      const result = await model.generateContent([prompt, ...imageParts]);
-      
-      if (!result || !result.response || !result.response.candidates || result.response.candidates.length === 0) {
-        throw new Error("AI model returned an empty response. Stitching failed.");
+      if (!panoramaBuffer || panoramaBuffer.length < 100) {
+        throw new Error('Panorama buffer is empty or invalid after generation/fallback');
       }
 
-      const parts = result.response.candidates[0].content.parts;
-      
-      // Look for the generated image output from the multimodal model
-      const imagePart = parts.find(p => p.inlineData && p.inlineData.mimeType.startsWith('image/'));
-      
-      let panoramaBuffer;
-      if (imagePart) {
-        panoramaBuffer = Buffer.from(imagePart.inlineData.data, 'base64');
-      } else {
-        // If the API returned base64 directly inside text unexpectedly
-        const text = parts[0].text;
-        const base64Match = text && typeof text === 'string' ? text.match(/[A-Za-z0-9+/=]{1000,}/) : null;
-        if (base64Match) {
-            panoramaBuffer = Buffer.from(base64Match[0], 'base64');
-        } else {
-            throw new Error("The AI model did not generate a valid seamless panorama image. Please ensure sufficient image overlap and try again.");
-        }
-      }
+      // 3. Final validation of the panorama image
+      const finalMeta = await sharp(panoramaBuffer).metadata();
+      console.log(`[Stitch] Panorama dimensions: ${finalMeta.width}x${finalMeta.height}`);
 
-      // 3. Ensure proper dimensions and format using Sharp with compression
-      const finalBuffer = await sharp(panoramaBuffer)
-        .resize(4096, 2048, { fit: 'cover' })
-        .jpeg({ 
-          quality: 85,
-          progressive: true,
-          mozjpeg: true,
-          trellisQuantisation: true
-        })
-        .toBuffer({ resolveWithObject: true });
+      // 4. Compress for upload
+      const compressedBuffer = await compressPanorama(panoramaBuffer);
 
-      // 3.1. Check file size and compress further if needed
-      let compressedBuffer = finalBuffer.data;
-      const fileSizeMB = finalBuffer.info.size / (1024 * 1024);
-      
-      if (fileSizeMB > 4.0) { // Leave margin under 4.5MB limit
-        console.log(`Panorama size: ${fileSizeMB.toFixed(2)}MB, compressing further...`);
-        
-        // Apply aggressive compression for large files
-        compressedBuffer = await sharp(panoramaBuffer)
-          .resize(4096, 2048, { fit: 'cover' })
-          .jpeg({ 
-            quality: 70,
-            progressive: true,
-            mozjpeg: true,
-            trellisQuantisation: true
-          })
-          .toBuffer({ resolveWithObject: true });
-        
-        const compressedSizeMB = compressedBuffer.info.size / (1024 * 1024);
-        console.log(`Compressed panorama size: ${compressedSizeMB.toFixed(2)}MB`);
-      }
-
-      // 4. Upload finished masterpiece to Cloudinary
+      // 5. Upload to Cloudinary
       const uploadResult = await uploadImage(
-        compressedBuffer || finalBuffer.data,
+        compressedBuffer,
         `xrplot/${worldId}/panoramas`
       );
+      console.log(`[Stitch] Uploaded panorama: ${uploadResult.url}`);
 
-      // Update node data
+      // 6. Update node
       node.panoramaUrl = uploadResult.url;
       node.panoramaPublicId = uploadResult.publicId;
       node.status = 'ready';
+      node.stitchMethod = usedFallback ? 'sharp-fallback' : 'ai-gemini';
       await world.save();
 
       return NextResponse.json({
         panoramaUrl: uploadResult.url,
         status: 'ready',
+        method: usedFallback ? 'sharp-fallback' : 'ai-gemini',
       });
 
     } catch (stitchError) {
+      console.error('[Stitch] Fatal stitch error:', stitchError);
       node.status = 'error';
+      node.stitchError = stitchError.message;
       await world.save();
       throw stitchError;
     }

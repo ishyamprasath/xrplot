@@ -189,9 +189,9 @@ export default function ImageUploadModal({ type, worldId, itemId, existingImages
 
   const handleUpload = async () => {
     if (type === 'node') {
-      const invalidDirs = Object.entries(nodeImages).filter(([dir, imgs]) => imgs.length < 2);
+      const invalidDirs = Object.entries(nodeImages).filter(([dir, imgs]) => imgs.length < 1);
       if (invalidDirs.length > 0) {
-        setError(`Please provide at least 2 images for: ${invalidDirs.map(d => d[0]).join(', ')}`);
+        setError(`Please provide at least 1 image for: ${invalidDirs.map(d => d[0]).join(', ')}`);
         return;
       }
     } else {
@@ -330,7 +330,7 @@ export default function ImageUploadModal({ type, worldId, itemId, existingImages
           <>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: 'var(--space-md)' }}>
               {type === 'node'
-                ? `Please provide images for all 5 directions (Up, Down, Left, Right, Middle). Minimum 2 and maximum 5 per direction.`
+                ? `Please provide images for all 5 directions (Up, Down, Left, Right, Middle). Minimum 1 and maximum 5 per direction.`
                 : `Upload ${minImagesEdge}-${maxImagesEdge} photos of the connecting area (doorway, hallway, path) between the two spaces.`
               }
             </p>
@@ -388,7 +388,7 @@ export default function ImageUploadModal({ type, worldId, itemId, existingImages
                         ))}
                       </div>
                     ) : (
-                      <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>0/5 images (minimum 2)</p>
+                      <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>0/5 images (minimum 1)</p>
                     )}
                   </div>
                 ))}
@@ -518,8 +518,8 @@ export default function ImageUploadModal({ type, worldId, itemId, existingImages
                     <button
                       className="btn btn-secondary"
                       onClick={() => {
-                        if (type === 'node' && existingImages.length < 10) {
-                          setError('Please upload at least 10 images total (minimum 2 per direction) before analyzing.');
+                        if (type === 'node' && existingImages.length < 5) {
+                          setError('Please upload at least 5 images total (minimum 1 per direction) before analyzing.');
                           return;
                         }
                         type === 'node' ? handleAnalyze() : handleStitch();
