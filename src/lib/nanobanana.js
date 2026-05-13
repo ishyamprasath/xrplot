@@ -155,3 +155,40 @@ export async function generateImageWithGemini(prompt, inputImages = [], options 
 
   throw new Error(`[NanoBanana] All ${maxRetries} attempts failed. Last error: ${lastError.message}`);
 }
+
+/**
+ * Generate text using Gemini 2.5 Flash (direct API via NanoBanana)
+ * For Decade 2.0 analysis and other text tasks.
+ */
+export async function generateTextWithGemini(prompt, options = {}) {
+  const { maxRetries = MAX_RETRIES } = options;
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[NanoBanana Text] Attempt ${attempt}/${maxRetries}`);
+      const result = await getAI().models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      });
+
+      const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (text && text.trim().length > 0) {
+        console.log(`[NanoBanana Text] Response received, length: ${text.length}`);
+        return text;
+      }
+
+      throw new Error('Empty text in Gemini response');
+    } catch (err) {
+      lastError = err;
+      console.error(`[NanoBanana Text] Attempt ${attempt} failed:`, err.message);
+      if (attempt < maxRetries) {
+        const delay = RETRY_DELAY_MS * attempt;
+        console.log(`[NanoBanana Text] Waiting ${delay}ms before retry...`);
+        await sleep(delay);
+      }
+    }
+  }
+
+  throw new Error(`[NanoBanana Text] All ${maxRetries} attempts failed. Last error: ${lastError.message}`);
+}
