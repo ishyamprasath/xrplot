@@ -1,5 +1,5 @@
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-const TEXT_MODEL = 'nvidia/nemotron-3-super-120b-a12b:free';
+const TEXT_MODEL = 'openrouter/auto';
 
 async function callOpenRouterText(prompt, maxTokens = 2048, maxRetries = 3) {
   if (!OPENROUTER_API_KEY) {
