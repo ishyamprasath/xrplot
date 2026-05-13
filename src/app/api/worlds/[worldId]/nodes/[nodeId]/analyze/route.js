@@ -4,7 +4,6 @@ import connectDB from '@/lib/db';
 import World from '@/models/World';
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-const TEXT_MODEL = 'nvidia/nemotron-3-super-120b-a12b:free';
 
 export async function POST(request, { params }) {
   const resolvedParams = await params;
@@ -98,7 +97,7 @@ Respond ONLY in this exact JSON format:
         "X-Title": "XRPlot"
       },
       body: JSON.stringify({
-        model: TEXT_MODEL,
+        model: "openrouter/auto",
         messages: messages,
         max_tokens: 2048,
         temperature: 0.1
