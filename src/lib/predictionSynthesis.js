@@ -5,46 +5,7 @@
  */
 
 import { v2 as cloudinary } from 'cloudinary';
-
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-const IMAGE_MODEL = 'google/gemini-2.5-flash-image';
-
-async function generateImageWithOpenRouter(prompt, { maxRetries = 3 } = {}) {
-  if (!OPENROUTER_API_KEY) throw new Error('OPENROUTER_API_KEY missing');
-  let lastError;
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
-          'X-Title': 'XRPlot',
-        },
-        body: JSON.stringify({ model: IMAGE_MODEL, messages: [{ role: 'user', content: prompt }] }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
-      const data = await res.json();
-      const raw = data.choices?.[0]?.message?.content || '';
-      
-      console.log(`[OpenRouter] Raw response length: ${raw.length}, preview: ${raw.slice(0, 300)}`);
-      console.log(`[OpenRouter] Full response keys:`, Object.keys(data));
-
-      const md = raw.match(/!\[.*?\]\((data:image\/(?:png|jpeg|webp);base64,([A-Za-z0-9+/=]+))\)/);
-      if (md?.[2]) return Buffer.from(md[2], 'base64');
-
-      const uri = raw.match(/data:image\/(?:png|jpeg|webp);base64,([A-Za-z0-9+/=]+)/);
-      if (uri?.[1]) return Buffer.from(uri[1], 'base64');
-
-      const bare = raw.match(/^([A-Za-z0-9+/=]{100,})$/);
-      if (bare?.[1]) return Buffer.from(bare[1], 'base64');
-
-      throw new Error('No image in response');
-    } catch (e) { lastError = e; if (attempt < maxRetries) await new Promise(r => setTimeout(r, attempt * 2000)); }
-  }
-  throw new Error(`Image gen failed: ${lastError.message}`);
-}
+import { generateImageWithGemini } from './nanobanana';
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -96,10 +57,10 @@ async function generateSinglePanorama(prompt, sceneType, index) {
 
   let imageBuffer;
   try {
-    imageBuffer = await generateImageWithOpenRouter(prompt);
-    console.log(`[OpenRouter] Generated ${sceneType}[${index}], size:`, imageBuffer.length);
+    imageBuffer = await generateImageWithGemini(prompt);
+    console.log(`[NanoBanana] Generated ${sceneType}[${index}], size:`, imageBuffer.length);
   } catch (modelErr) {
-    console.error(`[ImageGen] OpenRouter error for ${sceneType}[${index}]:`, modelErr.message);
+    console.error(`[ImageGen] NanoBanana error for ${sceneType}[${index}]:`, modelErr.message);
     throw new Error(`Image generation failed: ${modelErr.message}`);
   }
 
