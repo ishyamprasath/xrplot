@@ -4,7 +4,9 @@ import connectDB from '@/lib/db';
 import World from '@/models/World';
 import { uploadImage } from '@/lib/cloudinary';
 import sharp from 'sharp';
-import { generateImageWithGemini } from '@/lib/nanobanana';
+
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const STITCH_MODEL = 'google/gemini-2.5-flash-image';
 
 const PANORAMA_WIDTH = 4096;
 const PANORAMA_HEIGHT = 2048;
@@ -51,6 +53,102 @@ async function preprocessImages(imageUrls) {
     }
   }
   return processed;
+}
+
+/**
+ * Generate an image via OpenRouter using google/gemini-2.5-flash-image.
+ * Sends prompt + reference images, extracts generated image from response.
+ */
+async function generateImageWithOpenRouter(prompt, inputImages = [], { maxRetries = 3 } = {}) {
+  if (!OPENROUTER_API_KEY) {
+    throw new Error('OPENROUTER_API_KEY is not configured');
+  }
+
+  // Build OpenAI-compatible message with text + images
+  const content = [
+    { type: 'text', text: prompt },
+    ...inputImages.map(img => ({
+      type: 'image_url',
+      image_url: { url: `data:${img.mimeType};base64,${img.base64}` },
+    })),
+  ];
+
+  const messages = [{ role: 'user', content }];
+
+  let lastError;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[OpenRouter Stitch] Attempt ${attempt}/${maxRetries} with model ${STITCH_MODEL}`);
+
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+          'X-Title': 'XRPlot',
+        },
+        body: JSON.stringify({
+          model: STITCH_MODEL,
+          messages,
+          // Some image models benefit from a system prompt
+          ...(attempt === 1 && {
+            // Only on first attempt, no extra params
+          }),
+        }),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`OpenRouter HTTP ${response.status}: ${errText}`);
+      }
+
+      const data = await response.json();
+      const assistantMsg = data.choices?.[0]?.message;
+      const rawContent = assistantMsg?.content || '';
+
+      if (!rawContent) {
+        throw new Error('OpenRouter returned empty content');
+      }
+
+      // Extract image from markdown data URL: ![alt](data:image/...;base64,...)
+      const mdMatch = rawContent.match(/!\[.*?\]\((data:image\/(?:png|jpeg|webp);base64,([A-Za-z0-9+/=]+))\)/);
+      if (mdMatch && mdMatch[2]) {
+        const base64 = mdMatch[2];
+        const buffer = Buffer.from(base64, 'base64');
+        console.log(`[OpenRouter Stitch] Image extracted from markdown: ${buffer.length} bytes`);
+        return buffer;
+      }
+
+      // Fallback: look for any raw data URI in the content
+      const dataUriMatch = rawContent.match(/data:image\/(?:png|jpeg|webp);base64,([A-Za-z0-9+/=]+)/);
+      if (dataUriMatch && dataUriMatch[1]) {
+        const buffer = Buffer.from(dataUriMatch[1], 'base64');
+        console.log(`[OpenRouter Stitch] Image extracted from data URI: ${buffer.length} bytes`);
+        return buffer;
+      }
+
+      // If response is just base64 without data URI prefix
+      const bareBase64Match = rawContent.match(/^([A-Za-z0-9+/=]{100,})$/);
+      if (bareBase64Match && bareBase64Match[1]) {
+        const buffer = Buffer.from(bareBase64Match[1], 'base64');
+        console.log(`[OpenRouter Stitch] Image extracted from bare base64: ${buffer.length} bytes`);
+        return buffer;
+      }
+
+      throw new Error('Could not extract image from OpenRouter response. Raw content preview: ' + rawContent.slice(0, 200));
+    } catch (err) {
+      lastError = err;
+      console.error(`[OpenRouter Stitch] Attempt ${attempt} failed:`, err.message);
+      if (attempt < maxRetries) {
+        const delay = attempt * 2000;
+        console.log(`[OpenRouter Stitch] Retrying in ${delay}ms...`);
+        await new Promise(r => setTimeout(r, delay));
+      }
+    }
+  }
+
+  throw new Error(`OpenRouter image generation failed after ${maxRetries} attempts: ${lastError.message}`);
 }
 
 /**
@@ -191,14 +289,10 @@ export async function POST(request, { params }) {
       let usedFallback = false;
 
       try {
-        panoramaBuffer = await generateImageWithGemini(prompt, inputImages, {
+        panoramaBuffer = await generateImageWithOpenRouter(prompt, inputImages, {
           maxRetries: 3,
-          validate: true,
-          normalize: true,
-          targetWidth: PANORAMA_WIDTH,
-          targetHeight: PANORAMA_HEIGHT,
         });
-        console.log('[Stitch] AI panorama generated successfully');
+        console.log('[Stitch] AI panorama generated successfully via OpenRouter');
       } catch (aiErr) {
         console.error('[Stitch] AI generation failed:', aiErr.message);
         console.log('[Stitch] Falling back to sharp-based panorama...');
@@ -231,13 +325,13 @@ export async function POST(request, { params }) {
       node.panoramaUrl = uploadResult.url;
       node.panoramaPublicId = uploadResult.publicId;
       node.status = 'ready';
-      node.stitchMethod = usedFallback ? 'sharp-fallback' : 'ai-gemini';
+      node.stitchMethod = usedFallback ? 'sharp-fallback' : 'ai-openrouter';
       await world.save();
 
       return NextResponse.json({
         panoramaUrl: uploadResult.url,
         status: 'ready',
-        method: usedFallback ? 'sharp-fallback' : 'ai-gemini',
+        method: usedFallback ? 'sharp-fallback' : 'ai-openrouter',
       });
 
     } catch (stitchError) {
