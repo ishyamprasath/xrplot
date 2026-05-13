@@ -44,7 +44,7 @@ function getRecentPrediction(userId, location) {
   return predictionRequestStore.get(key);
 }
 
-const MODEL_NAME = 'nvidia/nemotron-3-super-120b-a12b:free';
+const MODEL_NAME = 'nvidia/nemotron-3-nano-30b-a3b';
 
 function getBaseUrl() {
   if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL;
