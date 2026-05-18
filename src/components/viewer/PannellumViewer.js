@@ -120,11 +120,16 @@ export default function PannellumViewer({ imageUrl, width = '100%', height = '10
           URL: hotspot.url || '',
           sceneId: hotspot.sceneId || '',
           targetPitch: hotspot.targetPitch || 0,
-          targetYaw: hotspot.targetYaw || 0
+          targetYaw: hotspot.targetYaw || 0,
+          clickHandlerFunc: () => {
+            if (onHotspotClick) {
+              onHotspotClick(hotspot);
+            }
+          }
         });
       });
     }
-  }, [hotspots]);
+  }, [hotspots, onHotspotClick]);
 
   return (
     <div style={{ width, height, position: 'relative' }}>

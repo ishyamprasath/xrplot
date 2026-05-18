@@ -21,8 +21,8 @@ function ConnectionEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition
         path={edgePath}
         style={{
           ...style,
-          strokeDasharray: hasImages ? 'none' : '8 4',
-          animation: hasImages ? 'none' : 'flowDash 1s linear infinite',
+          strokeDasharray: hasImages ? 'none' : '8 5',
+          animation: hasImages ? 'none' : 'flowDash 12s linear infinite',
         }}
       />
       <EdgeLabelRenderer>
@@ -31,15 +31,25 @@ function ConnectionEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition
             position: 'absolute',
             transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
             pointerEvents: 'all',
+            display: 'flex',
+            gap: '6px',
+            alignItems: 'center'
           }}
-          className="nodrag nopan"
+          className="nodrag nopan connection-edge-tools"
         >
           <button
-            className="edge-upload-btn"
+            className={`edge-upload-btn ${hasImages ? 'ready' : ''}`}
             onClick={() => dispatch('openEdgeUpload')}
-            title={hasImages ? `${data.transitionImages.length} transition photos` : 'Upload transition photos'}
+            title={hasImages ? `${data.transitionImages.length} transition photos` : 'Add transition photos'}
           >
-            {hasImages ? '✓' : '📸'}
+            {hasImages ? 'OK' : '+'}
+          </button>
+          <button
+            className="edge-delete-btn"
+            onClick={() => dispatch('deleteEdge')}
+            title="Delete Connection"
+          >
+            ✕
           </button>
         </div>
       </EdgeLabelRenderer>

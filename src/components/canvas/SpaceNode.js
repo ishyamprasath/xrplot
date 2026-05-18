@@ -1,21 +1,26 @@
 'use client';
 
-import { memo, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { Handle, Position } from '@xyflow/react';
 
 const statusConfig = {
-  empty: { label: 'Empty', className: 'badge-empty' },
+  empty: { label: 'No panorama', className: 'badge-empty' },
   uploaded: { label: 'Uploaded', className: 'badge-uploaded' },
-  analyzing: { label: 'Analyzing...', className: 'badge-analyzing' },
-  stitching: { label: 'Stitching...', className: 'badge-stitching' },
+  analyzing: { label: 'Analyzing', className: 'badge-analyzing' },
+  stitching: { label: 'Stitching', className: 'badge-stitching' },
   ready: { label: 'Ready', className: 'badge-ready' },
-  error: { label: 'Error', className: 'badge-error' },
+  error: { label: 'Needs review', className: 'badge-error' },
 };
 
 function SpaceNode({ id, data, selected }) {
   const [editing, setEditing] = useState(false);
   const [label, setLabel] = useState(data.label || 'New Space');
   const status = statusConfig[data.status] || statusConfig.empty;
+  const imageCount = data.images?.length || 0;
+
+  useEffect(() => {
+    setLabel(data.label || 'New Space');
+  }, [data.label]);
 
   const dispatch = (type, detail = {}) => {
     window.dispatchEvent(new CustomEvent('xrplot-action', { detail: { type, nodeId: id, ...detail } }));
@@ -23,80 +28,80 @@ function SpaceNode({ id, data, selected }) {
 
   const handleLabelBlur = () => {
     setEditing(false);
-    if (label !== data.label) {
-      dispatch('updateNodeLabel', { data: { label } });
+    const nextLabel = label.trim() || 'New Space';
+    setLabel(nextLabel);
+    if (nextLabel !== data.label) {
+      dispatch('updateNodeLabel', { data: { label: nextLabel } });
     }
   };
 
   return (
     <div className={`space-node ${selected ? 'selected' : ''}`}>
-      {/* Connection handles */}
-      <Handle type="target" position={Position.Top} style={{ background: '#7c3aed', border: '2px solid #0d0d1a', width: 10, height: 10 }} />
-      <Handle type="source" position={Position.Bottom} style={{ background: '#7c3aed', border: '2px solid #0d0d1a', width: 10, height: 10 }} />
-      <Handle type="target" position={Position.Left} id="left-target" style={{ background: '#7c3aed', border: '2px solid #0d0d1a', width: 10, height: 10 }} />
-      <Handle type="source" position={Position.Right} id="right-source" style={{ background: '#7c3aed', border: '2px solid #0d0d1a', width: 10, height: 10 }} />
+      <Handle type="target" position={Position.Top} className="node-handle node-handle-top" />
+      <Handle type="source" position={Position.Bottom} className="node-handle node-handle-bottom" />
+      <Handle type="target" position={Position.Left} id="left-target" className="node-handle node-handle-left" />
+      <Handle type="source" position={Position.Right} id="right-source" className="node-handle node-handle-right" />
 
-      {/* Header */}
-      <div className="space-node-header">
-        <div className="space-node-label">
-          🏠
-          {editing ? (
-            <input
-              className="input"
-              style={{ padding: '2px 6px', fontSize: '0.85rem', width: 120 }}
-              value={label}
-              onChange={e => setLabel(e.target.value)}
-              onBlur={handleLabelBlur}
-              onKeyDown={e => e.key === 'Enter' && handleLabelBlur()}
-              autoFocus
-            />
-          ) : (
-            <span onClick={() => setEditing(true)} style={{ cursor: 'text' }}>{label}</span>
-          )}
-        </div>
+      <div className="space-node-topline">
+        <span className="node-type-chip">Space</span>
+        <span className={`node-readiness ${data.panoramaUrl ? 'ready' : ''}`} />
       </div>
 
-      {/* Thumbnail */}
       <div className="space-node-thumb">
         {data.panoramaUrl ? (
           <img src={data.panoramaUrl} alt={label} />
         ) : data.images?.length > 0 ? (
           <img src={data.images[0].url} alt={label} />
         ) : (
-          '📷'
+          <div className="node-placeholder">
+            <span />
+            <strong>360</strong>
+          </div>
         )}
       </div>
 
-      {/* Status */}
-      <div className="space-node-status">
+      <div className="space-node-body">
+        {editing ? (
+          <input
+            className="input node-title-input"
+            value={label}
+            onChange={e => setLabel(e.target.value)}
+            onBlur={handleLabelBlur}
+            onKeyDown={e => e.key === 'Enter' && handleLabelBlur()}
+            autoFocus
+          />
+        ) : (
+          <button className="space-node-title" onClick={() => setEditing(true)}>
+            {label}
+          </button>
+        )}
         <span className={`badge ${status.className}`}>
           <span className="badge-dot" />
           {status.label}
-          {data.images?.length > 0 && ` · ${data.images.length} imgs`}
+          {imageCount > 0 ? ` - ${imageCount} images` : ''}
         </span>
       </div>
 
-      {/* Actions */}
       <div className="space-node-actions">
         <button
           className="btn btn-secondary"
           onClick={(e) => { e.stopPropagation(); dispatch('openCapture'); }}
         >
-          📷 Capture
+          Capture
         </button>
         <button
           className="btn btn-secondary"
           onClick={(e) => { e.stopPropagation(); dispatch('openUpload'); }}
         >
-          � Upload
+          Upload
         </button>
         <button
           className="btn btn-primary"
           onClick={(e) => { e.stopPropagation(); dispatch('openPreview'); }}
           disabled={!data.panoramaUrl}
-          style={{ opacity: data.panoramaUrl ? 1 : 0.4 }}
+          title={!data.panoramaUrl ? 'Add a panorama before previewing this space' : 'Preview this space'}
         >
-          👁️ Preview
+          Preview
         </button>
       </div>
     </div>

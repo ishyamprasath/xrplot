@@ -31,7 +31,7 @@ export default function WorldViewer({ world, onExit }) {
     return connections.map(({ edge, node }) => ({
       pitch: -10, // Slightly below horizon
       yaw: calculateYaw(node), // Calculate yaw based on node position
-      type: 'scene',
+      type: 'info',
       text: node.label,
       sceneId: node.id,
       targetPitch: 0,
