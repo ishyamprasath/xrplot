@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState, useMemo } from 'react';
-import 'pannellum/build/pannellum.css';
 
 export default function PannellumViewer({ imageUrl, width = '100%', height = '100%', hotspots: hotspotsProp, onHotspotClick }) {
   const containerRef = useRef(null);

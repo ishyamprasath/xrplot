@@ -2,9 +2,9 @@ import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import World from '@/models/World';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const TEXT_MODEL = 'nvidia/nemotron-3-nano-30b-a3b';
 
 export async function POST(request, { params }) {
   const resolvedParams = await params;
@@ -18,7 +18,7 @@ export async function POST(request, { params }) {
     const world = await World.findOne({ _id: worldId, userId });
     if (!world) return NextResponse.json({ error: 'World not found' }, { status: 404 });
 
-    const node = world.nodes.find(n => n.id === nodeId);
+    const node = world.nodes.find(n => String(n.id) === String(nodeId));
     if (!node) return NextResponse.json({ error: 'Node not found' }, { status: 404 });
 
     if (!node.images || node.images.length === 0) {
@@ -44,9 +44,7 @@ export async function POST(request, { params }) {
       }
     }
 
-    // Send to Gemini Vision
-    const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite-preview' });
-
+    // Send to OpenRouter API
     const prompt = `You are analyzing photos of a physical space (room, street, outdoor area, etc.) to create a 360° panorama.
 
 For each image (numbered 1 to ${imageParts.length}), classify its viewing direction:
@@ -78,8 +76,42 @@ Respond ONLY in this exact JSON format:
   "qualityNotes": "Good overlap between images. Lighting is consistent."
 }`;
 
-    const result = await model.generateContent([prompt, ...imageParts]);
-    const responseText = result.response.text();
+    const messages = [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: prompt },
+          ...imageParts.map(img => ({
+            type: "image_url",
+            image_url: { url: `data:image/jpeg;base64,${img.inlineData.data}` }
+          }))
+        ]
+      }
+    ];
+
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+        "X-Title": "XRPlot"
+      },
+      body: JSON.stringify({
+        model: TEXT_MODEL,
+        messages: messages,
+        max_tokens: 2048,
+        temperature: 0.1
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`OpenRouter API error ${response.status}: ${errorText}`);
+    }
+
+    const data = await response.json();
+    const responseText = data.choices?.[0]?.message?.content || '';
     
     // Parse JSON from response
     let analysis;
@@ -99,12 +131,18 @@ Respond ONLY in this exact JSON format:
     }
 
     // Update image classifications
-    if (analysis.classifications) {
+    if (analysis.classifications && Array.isArray(node.images)) {
+      const VALID_DIRECTIONS = ['up', 'down', 'left', 'right', 'middle'];
       for (const cls of analysis.classifications) {
         if (node.images[cls.index]) {
-          node.images[cls.index].classification = cls.direction;
+          const currentCls = node.images[cls.index].classification?.toLowerCase();
+          // Only overwrite if it's not already a valid specific direction set by the user
+          if (!VALID_DIRECTIONS.includes(currentCls)) {
+            node.images[cls.index].classification = cls.direction;
+          }
         }
       }
+      world.markModified('nodes');
     }
 
     node.status = 'uploaded'; // Ready for stitching
