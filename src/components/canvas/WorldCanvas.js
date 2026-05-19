@@ -228,7 +228,7 @@ export default function WorldCanvas({ world, onSave, saving, lastSaved, onBack, 
   const onConnect = useCallback((connection) => {
     const edgeExists = edgesRef.current.some(
       e => (e.source === connection.source && e.target === connection.target) ||
-           (e.source === connection.target && e.target === connection.source),
+        (e.source === connection.target && e.target === connection.source),
     );
     if (edgeExists) return;
 
@@ -261,7 +261,7 @@ export default function WorldCanvas({ world, onSave, saving, lastSaved, onBack, 
     if (doubleClickNode !== node.id) {
       const existingEdge = edges.find(
         e => (e.source === doubleClickNode && e.target === node.id) ||
-             (e.source === node.id && e.target === doubleClickNode),
+          (e.source === node.id && e.target === doubleClickNode),
       );
       if (!existingEdge) {
         onConnect({ source: doubleClickNode, target: node.id });
