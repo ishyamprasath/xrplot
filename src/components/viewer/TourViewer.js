@@ -55,14 +55,106 @@ export default function TourViewer({
   hotspots = [],
   onHotspotClick,
   autoRotate = -1.5,
+  initialHfov = 120,
   onClose,
+  activePlacementHotspotId = null,
+  onPlaceHotspot,
 }) {
   const containerRef   = useRef(null);
   const viewerRef      = useRef(null);
+  const hotspotLongPressRef = useRef(new Map());
   const [ready, setReady]       = useState(false);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const attachHotspotInteractions = useCallback((hotSpotDiv, args = {}) => {
+    if (!hotSpotDiv) return;
+
+    const { hotspotId, label, onLongPress } = args;
+    let pressTimer = null;
+    let longPressTriggered = false;
+
+    hotSpotDiv.classList.add('tv-hotspot-root');
+    hotSpotDiv.style.width = 'auto';
+    hotSpotDiv.style.height = 'auto';
+    hotSpotDiv.style.minWidth = '0';
+    hotSpotDiv.style.minHeight = '0';
+    hotSpotDiv.style.padding = '0';
+    hotSpotDiv.style.margin = '0';
+    hotSpotDiv.style.border = '0';
+    hotSpotDiv.style.background = 'transparent';
+    hotSpotDiv.style.boxShadow = 'none';
+    hotSpotDiv.style.overflow = 'visible';
+    hotSpotDiv.style.display = 'flex';
+    hotSpotDiv.style.flexDirection = 'column';
+    hotSpotDiv.style.alignItems = 'center';
+    hotSpotDiv.style.justifyContent = 'center';
+    hotSpotDiv.style.gap = '6px';
+    hotSpotDiv.style.pointerEvents = 'auto';
+    hotSpotDiv.style.transform = 'translate(-50%, -100%)';
+    hotSpotDiv.innerHTML = '';
+
+    const marker = document.createElement('div');
+    marker.className = 'tv-hotspot-marker';
+    marker.textContent = 'i';
+
+    const text = document.createElement('div');
+    text.className = 'tv-hotspot-label';
+    text.textContent = label || '';
+
+    hotSpotDiv.appendChild(marker);
+    hotSpotDiv.appendChild(text);
+
+    const clearTimer = () => {
+      if (pressTimer) {
+        window.clearTimeout(pressTimer);
+        pressTimer = null;
+      }
+    };
+
+    const triggerLongPress = () => {
+      longPressTriggered = true;
+      if (hotspotId) {
+        hotspotLongPressRef.current.set(hotspotId, true);
+      }
+      onLongPress?.();
+      window.setTimeout(() => {
+        if (hotspotId) {
+          hotspotLongPressRef.current.delete(hotspotId);
+        }
+      }, 0);
+    };
+
+    const handlePointerDown = (event) => {
+      event.stopPropagation();
+      clearTimer();
+      pressTimer = window.setTimeout(triggerLongPress, 500);
+    };
+
+    const handlePointerUp = () => {
+      clearTimer();
+    };
+
+    const handlePointerLeave = () => {
+      clearTimer();
+    };
+
+    hotSpotDiv.style.cursor = onLongPress ? 'grab' : 'pointer';
+    hotSpotDiv.style.touchAction = 'manipulation';
+    hotSpotDiv.addEventListener('pointerdown', handlePointerDown);
+    hotSpotDiv.addEventListener('pointerup', handlePointerUp);
+    hotSpotDiv.addEventListener('pointerleave', handlePointerLeave);
+    hotSpotDiv.addEventListener('pointercancel', handlePointerLeave);
+    hotSpotDiv.addEventListener('contextmenu', (event) => event.preventDefault());
+
+    hotSpotDiv.addEventListener('click', (event) => {
+      if (!longPressTriggered) return;
+      event.preventDefault();
+      event.stopPropagation();
+      longPressTriggered = false;
+    });
+  }, []);
 
   // ── Init / re-init when imageUrl changes ─────────────────────────────────
   useEffect(() => {
@@ -93,7 +185,9 @@ export default function TourViewer({
           autoRotateInactivityDelay: 2000,
           compass:            true,
           northOffset:        0,
-          hfov:               100,
+          hfov:               initialHfov,
+          minHfov:           40,
+          maxHfov:           initialHfov,
           pitch:              0,
           yaw:                0,
           minPitch:           -85,
@@ -109,7 +203,13 @@ export default function TourViewer({
         });
 
         viewerRef.current.on('load', () => {
-          if (!cancelled) { setLoading(false); setReady(true); }
+          if (!cancelled) {
+            try {
+              viewerRef.current.setHfov?.(initialHfov, true);
+            } catch (err) {}
+            setLoading(false);
+            setReady(true);
+          }
         });
 
         viewerRef.current.on('error', err => {
@@ -131,41 +231,73 @@ export default function TourViewer({
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [imageUrl, autoRotate]);
-
-  // ── Update hotspots dynamically ──────────────────────────────────────────
-  const activeHotspotsRef = useRef([]);
+  }, [imageUrl, autoRotate, initialHfov]);
 
   useEffect(() => {
     if (!viewerRef.current || !ready) return;
 
     // Remove old hotspots using proper Pannellum API
-    activeHotspotsRef.current.forEach(id => {
-      try { viewerRef.current.removeHotSpot(id); } catch(e) {}
+    hotspots.forEach(h => {
+      try { viewerRef.current.removeHotSpot(h.id); } catch (e) {}
     });
-    activeHotspotsRef.current = [];
 
-    // Add new hotspots and track their generated IDs
+    // Add new hotspots using their stable ids when available
     hotspots.forEach((h, i) => {
-      const id = `hs_${Date.now()}_${i}`;
-      activeHotspotsRef.current.push(id);
-      
+      const id = h.id || `hs_${Date.now()}_${i}`;
       try {
         viewerRef.current.addHotSpot({
           id,
           pitch: h.pitch ?? 0,
           yaw:   h.yaw   ?? 0,
           type:  h.type  ?? 'info',
-          text:  h.text  ?? '',
+          cssClass: 'tv-hotspot-custom',
           ...(h.url      ? { URL: h.url }               : {}),
           ...(h.sceneId  ? { sceneId: h.sceneId }       : {}),
-          clickHandlerFunc: () => onHotspotClick?.(h),
+          clickHandlerFunc: () => {
+            if (hotspotLongPressRef.current.get(id)) {
+              hotspotLongPressRef.current.delete(id);
+              return;
+            }
+            onHotspotClick?.(h);
+          },
+          createTooltipFunc: attachHotspotInteractions,
+          createTooltipArgs: {
+            hotspotId: id,
+            label: h.text,
+            onLongPress: h.onLongPress,
+          },
         });
       } catch (err) {
         console.warn('Failed to add hotspot:', err);
       }
     });
-  }, [hotspots, ready, onHotspotClick]);
+  }, [hotspots, ready, onHotspotClick, attachHotspotInteractions]);
+
+  useEffect(() => {
+    if (!viewerRef.current || !ready || !activePlacementHotspotId || !onPlaceHotspot) return;
+
+    const container = viewerRef.current.getContainer?.();
+    if (!container) return;
+
+    const handleClick = (event) => {
+      if (!viewerRef.current?.mouseEventToCoords) return;
+      const coords = viewerRef.current.mouseEventToCoords(event);
+      if (!Array.isArray(coords) || coords.length < 2) return;
+
+      const [pitch, yaw] = coords;
+      if (typeof pitch !== 'number' || typeof yaw !== 'number') return;
+
+      onPlaceHotspot(activePlacementHotspotId, pitch, yaw);
+    };
+
+    container.style.cursor = 'crosshair';
+    container.addEventListener('click', handleClick);
+
+    return () => {
+      container.removeEventListener('click', handleClick);
+      container.style.cursor = '';
+    };
+  }, [activePlacementHotspotId, onPlaceHotspot, ready]);
 
   // ── Fullscreen toggle ────────────────────────────────────────────────────
   const toggleFullscreen = useCallback(() => {
@@ -240,11 +372,71 @@ export default function TourViewer({
         </div>
       )}
 
+      {ready && activePlacementHotspotId && (
+        <div className="tv-placement-badge">
+          Tap the panorama to place the selected hotspot.
+        </div>
+      )}
+
       <style jsx>{`
         .tv-root {
           position: relative; width: 100%; height: 100%;
           border-radius: 16px; overflow: hidden;
           background: #07071a;
+        }
+        .tv-placement-badge {
+          position: absolute; left: 50%; top: 56px; transform: translateX(-50%);
+          z-index: 12; padding: 8px 14px; border-radius: 999px;
+          background: rgba(6,182,212,0.16); backdrop-filter: blur(10px);
+          color: rgba(255,255,255,0.92); font-size: 0.75rem;
+          border: 1px solid rgba(103,232,249,0.28);
+        }
+        :global(.tv-hotspot-root) {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          pointer-events: auto;
+        }
+        :global(.tv-hotspot-custom) {
+          background: transparent !important;
+          border: 0 !important;
+          box-shadow: none !important;
+          padding: 0 !important;
+          width: auto !important;
+          height: auto !important;
+          overflow: visible !important;
+        }
+        :global(.tv-hotspot-marker) {
+          width: 28px;
+          height: 28px;
+          border-radius: 999px;
+          background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(232,232,232,0.94));
+          border: 2px solid rgba(0,0,0,0.78);
+          box-shadow: 0 8px 18px rgba(0,0,0,0.35);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #111827;
+          font-size: 16px;
+          font-weight: 900;
+          line-height: 1;
+          font-style: normal;
+          font-family: inherit;
+        }
+        :global(.tv-hotspot-label) {
+          max-width: 180px;
+          padding: 4px 10px;
+          border-radius: 999px;
+          background: rgba(7,7,26,0.72);
+          border: 1px solid rgba(255,255,255,0.12);
+          color: rgba(255,255,255,0.96);
+          font-size: 0.72rem;
+          line-height: 1.15;
+          text-align: center;
+          text-shadow: 0 1px 2px rgba(0,0,0,0.55);
+          white-space: normal;
         }
         .tv-container { width: 100%; height: 100%; }
 

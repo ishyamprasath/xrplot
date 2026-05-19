@@ -11,6 +11,7 @@ import {
   addEdge,
   MarkerType,
 } from '@xyflow/react';
+import { Maximize2, Minimize2 } from 'lucide-react';
 import '@xyflow/react/dist/style.css';
 import SpaceNode from './SpaceNode';
 import ConnectionEdge from './ConnectionEdge';
@@ -52,7 +53,7 @@ const guideSteps = [
   },
 ];
 
-export default function WorldCanvas({ world, onSave, saving, lastSaved, onBack, onPreview, onRefresh }) {
+export default function WorldCanvas({ world, onSave, saving, lastSaved, onBack, onPreview, onRefresh, isFullscreen = false, onToggleFullscreen }) {
   const initialNodes = (world.nodes || []).map(n => ({
     id: n.id,
     type: 'spaceNode',
@@ -414,6 +415,14 @@ export default function WorldCanvas({ world, onSave, saving, lastSaved, onBack, 
         <div className="builder-status">
           {saving ? 'Saving...' : lastSaved ? `Saved ${lastSaved.toLocaleTimeString()}` : 'Autosave ready'}
         </div>
+        <button
+          className="btn btn-secondary"
+          onClick={onToggleFullscreen}
+          title={isFullscreen ? 'Exit fullscreen mode' : 'Enter fullscreen mode'}
+        >
+          {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+          {isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+        </button>
         <button className="btn btn-secondary" onClick={handleManualSave} disabled={saving}>Save</button>
         <button
           className="btn btn-primary"

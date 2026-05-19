@@ -1,6 +1,6 @@
 'use client';
 
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { useState, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 
@@ -9,10 +9,13 @@ const WorldCanvas = dynamic(() => import('@/components/canvas/WorldCanvas'), { s
 export default function WorldEditorPage() {
   const { worldId } = useParams();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [world, setWorld] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState(null);
+  const isFullscreen = searchParams.get('fullscreen') === '1';
 
   const fetchWorld = useCallback(async () => {
     try {
@@ -52,6 +55,18 @@ export default function WorldEditorPage() {
     }
   }, [worldId]);
 
+  const toggleFullscreen = useCallback(() => {
+    const nextParams = new URLSearchParams(searchParams.toString());
+    if (isFullscreen) {
+      nextParams.delete('fullscreen');
+    } else {
+      nextParams.set('fullscreen', '1');
+    }
+
+    const nextQuery = nextParams.toString();
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+  }, [isFullscreen, pathname, router, searchParams]);
+
   if (loading) {
     return (
       <div className="canvas-page" style={{ alignItems: 'center', justifyContent: 'center' }}>
@@ -77,6 +92,8 @@ export default function WorldEditorPage() {
       onBack={() => router.push('/dashboard')}
       onPreview={() => router.push(`/worlds/${worldId}/preview`)}
       onRefresh={fetchWorld}
+      isFullscreen={isFullscreen}
+      onToggleFullscreen={toggleFullscreen}
     />
   );
 }

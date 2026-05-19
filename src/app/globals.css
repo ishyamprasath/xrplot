@@ -1371,6 +1371,16 @@ a:hover {
   position: relative;
 }
 
+.app-layout.fullscreen-mode {
+  background: #000;
+}
+
+.app-layout.fullscreen-mode .main-content {
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+}
+
 /* ============= Chat Interface ============= */
 .chat-layout {
   display: flex;

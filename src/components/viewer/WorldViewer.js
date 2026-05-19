@@ -1,16 +1,43 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 
-const PannellumViewer = dynamic(() => import('./PannellumViewer'), { ssr: false });
+const TourViewer = dynamic(() => import('./TourViewer'), { ssr: false });
 
 export default function WorldViewer({ world, onExit }) {
   const readyNodes = (world.nodes || []).filter(n => n.panoramaUrl && n.status === 'ready');
   const [currentNodeId, setCurrentNodeId] = useState(readyNodes[0]?.id || null);
   const [transitioning, setTransitioning] = useState(false);
+  const [hotspotPlacements, setHotspotPlacements] = useState({});
+  const [placementNotice, setPlacementNotice] = useState('');
+  const [activePlacementHotspotId, setActivePlacementHotspotId] = useState(null);
 
   const currentNode = world.nodes?.find(n => n.id === currentNodeId);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(`xrplot-hotspot-layout:${world?._id || 'default'}`);
+      setHotspotPlacements(saved ? JSON.parse(saved) : {});
+    } catch (err) {
+      setHotspotPlacements({});
+    }
+  }, [world?._id]);
+
+  const persistPlacements = useCallback((nextPlacements) => {
+    setHotspotPlacements(nextPlacements);
+    try {
+      localStorage.setItem(`xrplot-hotspot-layout:${world?._id || 'default'}`, JSON.stringify(nextPlacements));
+    } catch (err) {}
+  }, [world?._id]);
+
+  // Calculate yaw based on node position (simple implementation)
+  const calculateYaw = useCallback((node) => {
+    // For now, distribute hotspots evenly around 360 degrees
+    const index = readyNodes.findIndex(n => n.id === node.id);
+    if (index === -1) return 0;
+    return (index * 360 / readyNodes.length) - 180;
+  }, [readyNodes]);
 
   // Find connected nodes
   const getConnections = useCallback(() => {
@@ -26,26 +53,38 @@ export default function WorldViewer({ world, onExit }) {
 
   const connections = getConnections();
 
+  const beginHotspotPlacement = useCallback((nodeId) => {
+    setActivePlacementHotspotId(nodeId);
+    setPlacementNotice(`${world.nodes?.find(n => n.id === nodeId)?.label || 'Node'} is ready to move. Tap the panorama to place it.`);
+    window.setTimeout(() => setPlacementNotice(''), 1800);
+  }, [world.nodes]);
+
+  const placeHotspot = useCallback((nodeId, pitch, yaw) => {
+    const nextPlacements = {
+      ...hotspotPlacements,
+      [nodeId]: { pitch, yaw },
+    };
+
+    persistPlacements(nextPlacements);
+    setActivePlacementHotspotId(null);
+    setPlacementNotice(`${world.nodes?.find(n => n.id === nodeId)?.label || 'Node'} hotspot moved.`);
+    window.setTimeout(() => setPlacementNotice(''), 1400);
+  }, [hotspotPlacements, persistPlacements, world.nodes]);
+
   // Generate hotspots for Pannellum
   const generateHotspots = useCallback(() => {
     return connections.map(({ edge, node }) => ({
-      pitch: -10, // Slightly below horizon
-      yaw: calculateYaw(node), // Calculate yaw based on node position
+      id: node.id,
+      pitch: hotspotPlacements[node.id]?.pitch ?? -10,
+      yaw: hotspotPlacements[node.id]?.yaw ?? calculateYaw(node),
       type: 'info',
       text: node.label,
       sceneId: node.id,
       targetPitch: 0,
-      targetYaw: 0
+      targetYaw: 0,
+      onLongPress: () => beginHotspotPlacement(node.id),
     }));
-  }, [connections]);
-
-  // Calculate yaw based on node position (simple implementation)
-  const calculateYaw = useCallback((node) => {
-    // For now, distribute hotspots evenly around 360 degrees
-    const index = readyNodes.findIndex(n => n.id === node.id);
-    if (index === -1) return 0;
-    return (index * 360 / readyNodes.length) - 180;
-  }, [readyNodes]);
+  }, [connections, hotspotPlacements, calculateYaw, beginHotspotPlacement]);
 
   const navigateTo = useCallback((nodeId) => {
     setTransitioning(true);
@@ -78,34 +117,20 @@ export default function WorldViewer({ world, onExit }) {
       }} />
 
       {/* Panorama */}
-      <PannellumViewer 
+      <TourViewer 
         imageUrl={currentNode.panoramaUrl} 
         hotspots={generateHotspots()}
         onHotspotClick={(hotspot) => navigateTo(hotspot.sceneId)}
+        activePlacementHotspotId={activePlacementHotspotId}
+        onPlaceHotspot={placeHotspot}
+        autoRotate={0}
+        initialHfov={120}
       />
 
       {/* Top overlay */}
       <div className="viewer-overlay">
         <div className="viewer-label">📍 {currentNode.label}</div>
         <button className="viewer-exit-btn" onClick={onExit}>✕ Exit Preview</button>
-      </div>
-
-      {/* Navigation hotspots */}
-      <div style={{
-        position: 'absolute', bottom: 80, left: '50%', transform: 'translateX(-50%)',
-        display: 'flex', gap: 12, zIndex: 10,
-      }}>
-        {connections.map(({ edge, node }) => (
-          <button
-            key={node.id}
-            className="hotspot"
-            onClick={() => navigateTo(node.id)}
-            style={{ width: 'auto', borderRadius: 'var(--radius-lg)', padding: '10px 20px', fontSize: '0.85rem' }}
-            title={`Go to ${node.label}`}
-          >
-            → {node.label}
-          </button>
-        ))}
       </div>
 
       {/* Minimap */}
@@ -136,8 +161,18 @@ export default function WorldViewer({ world, onExit }) {
         padding: '6px 16px', borderRadius: 'var(--radius-full)',
         fontSize: '0.75rem', color: 'var(--text-muted)', zIndex: 10,
       }}>
-        🖱️ Drag to explore · Click arrows to navigate · Scroll to zoom
+        🖱️ Drag to explore · Click hotspot markers to navigate · Long press a hotspot to move its marker · Scroll to zoom
       </div>
+
+      {placementNotice && (
+        <div style={{
+          position: 'absolute', top: 70, left: '50%', transform: 'translateX(-50%)',
+          background: 'rgba(0,0,0,0.65)', color: 'white', padding: '8px 14px', borderRadius: 999,
+          fontSize: '0.75rem', zIndex: 15, border: '1px solid rgba(255,255,255,0.12)',
+        }}>
+          {placementNotice}
+        </div>
+      )}
     </div>
   );
 }

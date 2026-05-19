@@ -5,13 +5,15 @@ import { compressImage } from '@/utils/imageCompression';
 
 export default function ImageUploadModal({ type, worldId, itemId, existingImages = [], onClose, onComplete }) {
   const [images, setImages] = useState([]); // { file, preview } - Used for edge
+  const [uploadMode, setUploadMode] = useState('guided'); // guided | panorama
   const [nodeImages, setNodeImages] = useState({ // Used for node
-    up: [],
-    down: [],
+    top: [],
+    bottom: [],
     left: [],
     right: [],
     middle: []
   });
+  const [panoramaImage, setPanoramaImage] = useState(null);
   
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -31,7 +33,14 @@ export default function ImageUploadModal({ type, worldId, itemId, existingImages
   const minImagesEdge = 1;
   const maxImagesEdge = 4;
   
-  const DIRECTIONS = ['up', 'down', 'left', 'right', 'middle'];
+  const DIRECTIONS = ['top', 'bottom', 'left', 'right', 'middle'];
+  const directionLabels = {
+    top: 'Top (Up)',
+    bottom: 'Bottom (Down)',
+    left: 'Left',
+    right: 'Right',
+    middle: 'Middle',
+  };
 
   const hasNewImages = type === 'node' 
     ? Object.values(nodeImages).some(arr => arr.length > 0)
@@ -125,6 +134,17 @@ export default function ImageUploadModal({ type, worldId, itemId, existingImages
     });
   }, []);
 
+    const handlePanoramaFile = useCallback((files) => {
+      const validFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+      if (validFiles.length === 0) return;
+      const file = validFiles[0];
+      if (panoramaImage?.preview) {
+        URL.revokeObjectURL(panoramaImage.preview);
+      }
+      setPanoramaImage({ file, preview: URL.createObjectURL(file) });
+      setError('');
+    }, [panoramaImage]);
+
   const removeNodeImage = (dir, index) => {
     setNodeImages(prev => {
       const newImages = [...prev[dir]];
@@ -132,6 +152,14 @@ export default function ImageUploadModal({ type, worldId, itemId, existingImages
       newImages.splice(index, 1);
       return { ...prev, [dir]: newImages };
     });
+    setError('');
+  };
+
+  const removePanoramaImage = () => {
+    if (panoramaImage?.preview) {
+      URL.revokeObjectURL(panoramaImage.preview);
+    }
+    setPanoramaImage(null);
     setError('');
   };
 
@@ -189,10 +217,18 @@ export default function ImageUploadModal({ type, worldId, itemId, existingImages
 
   const handleUpload = async () => {
     if (type === 'node') {
-      const invalidDirs = Object.entries(nodeImages).filter(([dir, imgs]) => imgs.length < 1);
-      if (invalidDirs.length > 0) {
-        setError(`Please provide at least 1 image for: ${invalidDirs.map(d => d[0]).join(', ')}`);
-        return;
+      if (uploadMode === 'panorama') {
+        if (!panoramaImage) {
+          setError('Please select a 360 panorama image to upload');
+          return;
+        }
+      } else {
+        const requiredDirs = DIRECTIONS;
+        const missingDirs = requiredDirs.filter(dir => nodeImages[dir].length < 1);
+        if (missingDirs.length > 0) {
+          setError(`Please provide at least 1 image for: ${missingDirs.map(dir => directionLabels[dir] || dir).join(', ')}`);
+          return;
+        }
       }
     } else {
       if (images.length < minImagesEdge) {
@@ -209,10 +245,24 @@ export default function ImageUploadModal({ type, worldId, itemId, existingImages
       const formData = new FormData();
       
       if (type === 'node') {
-        const allNodeImages = Object.values(nodeImages).flat();
-        for (const img of allNodeImages) {
-          const compressedFile = await compressImage(img.file);
-          formData.append('images', compressedFile);
+        if (uploadMode === 'panorama') {
+          const compressedFile = await compressImage(panoramaImage.file);
+          formData.append('image', compressedFile);
+        } else {
+          const allNodeImages = [];
+          const directionOrder = [];
+          DIRECTIONS.forEach(dir => {
+            nodeImages[dir].forEach(img => {
+              allNodeImages.push(img);
+              directionOrder.push(dir);
+            });
+          });
+
+          for (const img of allNodeImages) {
+            const compressedFile = await compressImage(img.file);
+            formData.append('images', compressedFile);
+          }
+          formData.append('directions', JSON.stringify(directionOrder));
         }
       } else {
         for (const img of images) {
@@ -222,7 +272,9 @@ export default function ImageUploadModal({ type, worldId, itemId, existingImages
       }
 
       const endpoint = type === 'node'
-        ? `/api/worlds/${worldId}/nodes/${itemId}/images`
+        ? (uploadMode === 'panorama'
+          ? `/api/worlds/${worldId}/nodes/${itemId}/panorama`
+          : `/api/worlds/${worldId}/nodes/${itemId}/images`)
         : `/api/worlds/${worldId}/edges/${itemId}/images`;
 
       const res = await fetch(endpoint, { method: 'POST', body: formData });
@@ -242,7 +294,7 @@ export default function ImageUploadModal({ type, worldId, itemId, existingImages
 
       setProgress(100);
 
-      if (type === 'node') {
+      if (type === 'node' && uploadMode === 'guided') {
         setUploading(false);
         await handleAnalyze();
       } else {
@@ -330,10 +382,27 @@ export default function ImageUploadModal({ type, worldId, itemId, existingImages
           <>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: 'var(--space-md)' }}>
               {type === 'node'
-                ? `Please provide images for all 5 directions (Up, Down, Left, Right, Middle). Minimum 1 and maximum 5 per direction.`
+                ? `Choose guided directional photos or a direct 360 panorama. Guided mode uses Top, Bottom, Left, Right, and Middle.`
                 : `Upload ${minImagesEdge}-${maxImagesEdge} photos of the connecting area (doorway, hallway, path) between the two spaces.`
               }
             </p>
+
+            {type === 'node' && (
+              <div style={{ display: 'flex', gap: 'var(--space-sm)', marginBottom: 'var(--space-md)' }}>
+                <button
+                  className={`btn ${uploadMode === 'guided' ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setUploadMode('guided')}
+                >
+                  Guided photos
+                </button>
+                <button
+                  className={`btn ${uploadMode === 'panorama' ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setUploadMode('panorama')}
+                >
+                  Direct 360 panorama
+                </button>
+              </div>
+            )}
 
             {/* Existing images */}
             {existingImages.length > 0 && !hasNewImages && (
@@ -361,12 +430,12 @@ export default function ImageUploadModal({ type, worldId, itemId, existingImages
             )}
 
             {/* Node UI */}
-            {type === 'node' && !isProcessing && !analysis && (
+            {type === 'node' && uploadMode === 'guided' && !isProcessing && !analysis && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
                 {DIRECTIONS.map(dir => (
                   <div key={dir} className="direction-section" style={{ border: '1px solid var(--border-subtle)', padding: 'var(--space-md)', borderRadius: '8px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-sm)' }}>
-                      <h4 style={{ textTransform: 'capitalize', margin: 0, fontSize: '1rem' }}>{dir}</h4>
+                      <h4 style={{ textTransform: 'none', margin: 0, fontSize: '1rem' }}>{directionLabels[dir] || dir}</h4>
                       <div style={{ display: 'flex', gap: '8px' }}>
                         <label className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.8rem', cursor: 'pointer', margin: 0 }}>
                           Upload
@@ -393,6 +462,45 @@ export default function ImageUploadModal({ type, worldId, itemId, existingImages
                   </div>
                 ))}
               </div>
+            )}
+
+            {type === 'node' && uploadMode === 'panorama' && !isProcessing && !analysis && (
+              <>
+                <div
+                  className={`upload-zone ${dragging ? 'dragging' : ''}`}
+                  onClick={() => fileInputRef.current?.click()}
+                  onDragOver={e => { e.preventDefault(); setDragging(true); }}
+                  onDragLeave={() => setDragging(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragging(false);
+                    handlePanoramaFile(e.dataTransfer.files);
+                  }}
+                >
+                  <div className="upload-zone-icon" style={{ fontSize: '1.8rem', opacity: 0.5 }}>🌐</div>
+                  <p>Drop a 360 panorama here or <span className="highlight">browse files</span></p>
+                  <p style={{ fontSize: '0.75rem', marginTop: 8 }}>Single stitched equirectangular image • close to 2:1 aspect ratio</p>
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple={false}
+                  style={{ display: 'none' }}
+                  onChange={e => handlePanoramaFile(e.target.files)}
+                />
+
+                {panoramaImage && (
+                  <div className="upload-preview-grid" style={{ marginTop: 'var(--space-md)' }}>
+                    <div className="upload-preview-item" style={{ gridColumn: '1 / -1' }}>
+                      <img src={panoramaImage.preview} alt="360 panorama preview" />
+                      {!isProcessing && (
+                        <button className="upload-preview-remove" onClick={removePanoramaImage}>×</button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
 
             {/* Edge UI Drop zone */}

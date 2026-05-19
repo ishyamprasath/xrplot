@@ -1,4 +1,5 @@
 import './globals.css';
+import { Suspense } from 'react';
 import ClerkThemeProvider from '@/components/ClerkThemeProvider';
 import SidebarWrapper from '@/components/SidebarWrapper';
 
@@ -13,9 +14,11 @@ export default function RootLayout({ children }) {
     <ClerkThemeProvider>
       <html lang="en">
         <body>
-          <SidebarWrapper>
-            {children}
-          </SidebarWrapper>
+          <Suspense fallback={null}>
+            <SidebarWrapper>
+              {children}
+            </SidebarWrapper>
+          </Suspense>
         </body>
       </html>
     </ClerkThemeProvider>

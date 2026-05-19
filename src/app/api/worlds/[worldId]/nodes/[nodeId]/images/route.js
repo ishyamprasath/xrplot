@@ -50,25 +50,22 @@ export async function POST(request, { params }) {
     // Upload new images to Cloudinary
     const uploadResults = [...existingToKeep];
     
-    // We expect files to be in the same order as directions if passed as a map or individual entries
-    // But since formData.getAll returns an array, we should have a more reliable way.
-    // Let's assume the user sent them with specific names or we use the 'directions' map index.
-    
-    let fileIndex = 0;
-    for (const file of newFiles) {
+    const directionList = Array.isArray(directions) ? directions : null;
+
+    for (let fileIndex = 0; fileIndex < newFiles.length; fileIndex++) {
+      const file = newFiles[fileIndex];
       const bytes = await file.arrayBuffer();
       const buffer = Buffer.from(bytes);
       const result = await uploadImage(buffer, `xrplot/${worldId}/${nodeId}`);
       
       // Get direction for this specific file if available
-      const direction = directions[file.name] || ''; 
+      const direction = directionList?.[fileIndex] || directions[file.name] || '';
 
       uploadResults.push({
         url: result.url,
         publicId: result.publicId,
         classification: direction,
       });
-      fileIndex++;
     }
 
     if (uploadResults.length === 0) {

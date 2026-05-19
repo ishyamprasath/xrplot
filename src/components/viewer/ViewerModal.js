@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic';
 
-const PannellumViewer = dynamic(() => import('./PannellumViewer'), { ssr: false });
+const TourViewer = dynamic(() => import('./TourViewer'), { ssr: false });
 
 export default function ViewerModal({ panoramaUrl, label, onClose }) {
   return (
@@ -12,7 +12,7 @@ export default function ViewerModal({ panoramaUrl, label, onClose }) {
           <div className="viewer-label">🏠 {label || 'Space Preview'}</div>
           <button className="viewer-exit-btn" onClick={onClose}>✕ Close</button>
         </div>
-        <PannellumViewer imageUrl={panoramaUrl} />
+        <TourViewer imageUrl={panoramaUrl} autoRotate={0} />
         <div style={{
           position: 'absolute', bottom: 'var(--space-md)', left: '50%', transform: 'translateX(-50%)',
           background: 'var(--bg-glass)', backdropFilter: 'blur(12px)',

@@ -97,7 +97,7 @@ export default function Sidebar() {
     {/* Desktop Sidebar */}
     <div className="app-sidebar desktop-sidebar">
       <div className="sidebar-header" onClick={() => router.push('/dashboard')}>
-        <img src="/logo.png" alt="XRPlot" className="brand-icon" style={{ width: 38, height: 28, borderRadius: 6 }} />
+        {/* <img src="/logo.png" alt="XRPlot" className="brand-icon" style={{ width: 38, height: 28, borderRadius: 6 }} /> */}
         <span className="brand-text">XRPlot</span>
       </div>
 
