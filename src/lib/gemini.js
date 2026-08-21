@@ -63,28 +63,24 @@ export async function generateComprehensiveAnalysis(placeName, lat, lng) {
   try {
     console.log(`[OpenRouter] Analyzing ${placeName} at coordinates (${lat}, ${lng})`);
 
-    const prompt = `You are an expert analyst specializing in India's economic development and urban planning. Analyze the following:
+    const prompt = `You are a climate scientist + remote sensing ecologist + sustainable urban planner specializing in India's environmental crisis. Analyze:
 
-1. India's GDP and Economic Context:
-   - Current GDP trends and growth patterns
-   - Economic policies and their impact on development
-   - Regional economic factors affecting ${placeName}
-   - Infrastructure development and investment patterns
+1. Environmental Crisis Context for ${placeName} (${lat}, ${lng}):
+   - Green cover loss (NDVI), heat island intensity (LST), built-up sprawl (NDBI)
+   - Air quality & PM2.5 trends, water stress & groundwater depletion
+   - Why unchecked sprawl is an Earth emergency here (cite heat, floods, biodiversity loss)
 
-2. Location Analysis for ${placeName}:
-   - Current urban development status
-   - Population growth and demographics
-   - Infrastructure quality and availability
-   - Economic activities and employment patterns
-   - Environmental and geographical factors
+2. Location Eco-Analysis for ${placeName}:
+   - Current green cover %, canopy health, wetland/lake status
+   - Heat island hotspots, flood-prone basins, pollution corridors
+   - Population pressure vs ecological carrying capacity
 
-3. 10-Year Future Projection (2036):
-   - Realistic urban growth expectations
-   - Infrastructure development timeline
-   - Economic and social changes
-   - Environmental and sustainability considerations
+3. 10-Year Dual Future 2036 (Dystopia if we do nothing vs Regenerative if we act):
+   - Dystopia: +2-3°C hotter, -40% green, AQI 160+, deeper water table, biodiversity collapse
+   - Regenerative: Miyawaki forests, cool roofs, lake revival, bioswales - quantify cooling, carbon saved, flood reduction
+   - Concrete, nature-based solutions that residents & municipalities can actually implement
 
-Provide detailed insights with specific data points and realistic projections for 2036. Focus on practical, achievable developments rather than overly optimistic scenarios.`;
+Provide detailed eco-insights with specific numbers for 2036. Frame growth as environmental cost, not progress. Be urgent but hopeful.`;
 
     const text = await callOpenRouterText(prompt, 2048, 3);
     console.log(`[OpenRouter] Analysis completed for ${placeName}`);
@@ -127,26 +123,26 @@ function extractLocationInsights(response) {
 // Generate realistic 10-year future projection prompts
 export async function generateFutureProjectionPrompt(placeName, currentInsights, gdpInsights, locationInsights) {
   try {
-    const prompt = `Based on the following analysis of ${placeName}, generate a realistic 10-year projection for 2036:
+    const prompt = `Based on environmental analysis of ${placeName}, generate a DUAL 10-year eco-projection for 2036:
 
-Current Analysis:
+Current Eco-Analysis:
 ${currentInsights}
 
-GDP Context:
+Climate Context:
 ${gdpInsights}
 
-Location Factors:
+Location Eco-Factors:
 ${locationInsights}
 
 Requirements:
-1. REALISTIC PROJECTIONS - Consider India's actual development pace and constraints
-2. PRACTICAL CHANGES - Focus on achievable infrastructure and urban development
-3. MODERN TECHNOLOGY - Include realistic technological advancement
-4. SUSTAINABLE DEVELOPMENT - Balance growth with environmental considerations
-5. INFRASTRUCTURE FOCUS - Emphasize practical improvements in roads, buildings, utilities
-6. ECONOMIC REALISM - Reflect realistic economic growth patterns
+1. DYSTOPIA vs REGENERATION - Show both paths: if we sprawl unchecked (heat, floods, smog) vs if we regenerate (forests, cool roofs, lakes)
+2. SATELLITE-GROUNDED - Use NDBI/NDVI/LST logic: built-up up = green down = temp up
+3. NATURE-BASED SOLUTIONS - Miyawaki forests, wetland revival, permeable pavements, rooftop gardens
+4. QUANTIFIABLE IMPACT - Always state degrees cooled, AQI reduced, tons CO₂ saved, water recharged
+5. VISIBLE 360° CHANGES - Describe what a resident will SEE: barren vs lush street, flooded vs spongy basin
+6. HOPE + URGENCY - Dystopia is alarming but regenerative future is achievable and photorealistic
 
-Generate a detailed projection that shows how ${placeName} will realistically evolve by 2036, avoiding overly optimistic or sci-fi scenarios. Focus on practical, visible changes that residents would actually experience.`;
+Generate a projection that makes ${placeName}'s 2036 eco-future visceral and actionable, not sci-fi.`;
 
     const text = await callOpenRouterText(prompt, 2048, 3);
     console.log(`[OpenRouter] Generated projection for ${placeName}`);

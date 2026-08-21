@@ -198,13 +198,38 @@ export const tools = [
   },
   {
     name: 'createDecadePrediction',
-    description: 'Automated Decade 2.0 prediction. Detects location from query and generates a predictive world map.',
+    description: 'EARTH LENS 2036: Generate eco-prediction with NDVI/LST dystopia vs green future. Detects location and builds Earth Twin.',
     parameters: {
       type: 'object',
       properties: {
-        location: { type: 'string', description: 'The city or area to predict (e.g. "Chennai", "New York")' },
+        location: { type: 'string', description: 'The city or area to eco-predict (e.g. "Delhi", "Chennai", "Kochi")' },
         predictionYear: { type: 'number', description: 'Future year, default 2036' },
         worldId: { type: 'string', description: 'Optional: add prediction to existing world' },
+      },
+      required: ['location'],
+    },
+  },
+  {
+    name: 'analyzeEcoImpact',
+    description: 'Analyze environmental cost for a location: green loss, heat island, flood & air risk with AI fixes.',
+    parameters: {
+      type: 'object',
+      properties: {
+        location: { type: 'string', description: 'Place to analyze' },
+        lat: { type: 'number' },
+        lng: { type: 'number' },
+      },
+      required: ['location'],
+    },
+  },
+  {
+    name: 'suggestGreenInterventions',
+    description: 'Suggest nature-based solutions (Miyawaki, cool roofs, wetland revival) for a location with cooling & carbon math.',
+    parameters: {
+      type: 'object',
+      properties: {
+        location: { type: 'string' },
+        focus: { type: 'string', description: 'heat, flood, air, water, or all', enum: ['heat','flood','air','water','all'] },
       },
       required: ['location'],
     },
