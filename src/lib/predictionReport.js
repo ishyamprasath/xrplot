@@ -1,107 +1,104 @@
-/**
- * Urban Development Report Generator
- *
- * Uses Google Gemini AI to synthesize a detailed comparative urban
- * development report for a given coordinate based on NDBI trend data.
- * Produces categorized hotspot nodes (commercial, residential, healthcare,
- * education, green_space, infrastructure) with past-vs-future statistics.
- */
-
-const { GoogleGenAI } = require("@google/genai");
+import { GoogleGenAI } from "@google/genai";
 
 const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
 const SCENE_TYPES = [
-  { id: 'main_street',      label: 'Main Commercial Street',    icon: 'Store',      color: '#f59e0b' },
-  { id: 'residential',      label: 'Residential District',      icon: 'Home',       color: '#3b82f6' },
-  { id: 'healthcare',       label: 'Healthcare Zone',           icon: 'HeartPulse', color: '#ef4444' },
-  { id: 'education',        label: 'Education Campus',          icon: 'GraduationCap', color: '#8b5cf6' },
-  { id: 'green_space',      label: 'Green Space & Parks',       icon: 'TreePine',   color: '#10b981' },
-  { id: 'tech_hub',         label: 'Tech & Business Hub',       icon: 'Cpu',        color: '#06b6d4' },
+  { id: 'heat_island',     label: 'Urban Heat Island',       icon: 'Thermometer',  color: '#ef4444' },
+  { id: 'vanishing_green', label: 'Vanishing Green Belt',    icon: 'TreePine',     color: '#10b981' },
+  { id: 'flood_zone',      label: 'Flood Risk Corridor',     icon: 'Droplets',     color: '#3b82f6' },
+  { id: 'air_corridor',    label: 'Air Pollution Corridor',  icon: 'Wind',         color: '#f59e0b' },
+  { id: 'eco_restored',    label: 'Regenerated Oasis',       icon: 'Sprout',       color: '#22c55e' },
+  { id: 'water_stress',    label: 'Water Stress Zone',       icon: 'Waves',        color: '#06b6d4' },
 ];
 
 export function getSceneTypes() {
   return SCENE_TYPES;
 }
 
-function escapeJson(str) {
-  return str
-    .replace(/\\/g, '\\\\')
-    .replace(/"/g, '\\"')
-    .replace(/\n/g, '\\n')
-    .replace(/\r/g, '\\r')
-    .replace(/\t/g, '\\t');
-}
-
-export async function generateUrbanReport(lat, lng, ndbiTrend, urbanDensity, locationName) {
+export async function generateUrbanReport(lat, lng, ndbiTrend, urbanDensity, locationName, extraMetrics = {}) {
   if (!process.env.GEMINI_API_KEY) {
-    return generateFallbackReport(lat, lng, ndbiTrend, urbanDensity, locationName);
+    return generateFallbackReport(lat, lng, ndbiTrend, urbanDensity, locationName, extraMetrics);
   }
 
   const coordinates = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-  const trendSummary = ndbiTrend
-    ? `NDBI trend (10-year): started at ${(ndbiTrend[0] * 100).toFixed(1)}%, ended at ${(ndbiTrend[ndbiTrend.length - 1] * 100).toFixed(1)}%, slope ${((ndbiTrend[ndbiTrend.length - 1] - ndbiTrend[0]) / ndbiTrend.length * 100).toFixed(2)}% per year. Current urban density ${urbanDensity}%.`
-    : `Urban density ${urbanDensity}%.`;
+  const ndbiSlope = ndbiTrend && ndbiTrend.length > 1 ? ((ndbiTrend[ndbiTrend.length - 1] - ndbiTrend[0]) / ndbiTrend.length * 100).toFixed(2) : '1.2';
+  const ndviTrend = extraMetrics.ndviTrend || [];
+  const ndviSlope = ndviTrend.length > 1 ? ((ndviTrend[ndviTrend.length - 1] - ndviTrend[0]) / ndviTrend.length * 100).toFixed(2) : '-1.5';
+  const lstTrend = extraMetrics.lstTrend || [];
+  const tempRise = lstTrend.length > 1 ? (lstTrend[lstTrend.length - 1] - lstTrend[0]).toFixed(1) : '2.1';
 
   const currentYear = new Date().getFullYear();
   const futureYear = currentYear + 10;
   const startYear = currentYear - 10;
 
-  const prompt = `You are an expert urban planner and satellite intelligence analyst. Today's date is ${new Date().toLocaleDateString()}.
+  const prompt = `You are an expert climate scientist, remote sensing analyst and urban ecologist. Today's date is ${new Date().toLocaleDateString()}.
 
-Analyze the following location and generate a detailed URBAN DEVELOPMENT REPORT comparing the PAST DECADE (${startYear}-${currentYear}) with the PREDICTED NEXT DECADE (${currentYear}-${futureYear}).
+Analyze LOCATION and generate an ENVIRONMENTAL IMPACT REPORT comparing PAST DECADE (${startYear}-${currentYear}) vs PREDICTED NEXT DECADE (${currentYear}-${futureYear}) if current trends continue (Dystopia) and also what is possible with intervention (Green Future).
 
 Location: ${locationName || 'Unknown Area'} (${coordinates})
-${trendSummary}
+Satellite signals:
+- NDBI (built-up) trend: ${ndbiTrend ? `started ${(ndbiTrend[0]*100).toFixed(1)}% -> ${(ndbiTrend[ndbiTrend.length-1]*100).toFixed(1)}% slope ${ndbiSlope}%/yr` : 'rising'} | Urban density ${urbanDensity}%
+- NDVI (vegetation) trend: ${ndviTrend.length ? `${ndviTrend[0].toFixed(3)} -> ${ndviTrend[ndviTrend.length-1].toFixed(3)} slope ${ndviSlope}%/yr` : 'declining -1.5%/yr'} (negative = green loss)
+- LST (land surface temp) rise: +${tempRise}°C over decade
+- Current green cover: ~${extraMetrics.greenCover || 28}% | Water stress index: ${extraMetrics.waterStress || 62}/100
 
-Generate the report in this EXACT JSON format (no markdown, no extra text):
-
+Generate EXACT JSON (no markdown, no extra text):
 {
-  "summary": "A vivid 2-3 sentence narrative describing how this neighborhood has transformed and what it will look like in ${futureYear}.",
+  "summary": "2-3 vivid sentences: what green was lost, heat gained, and the choice between dystopia vs regeneration by ${futureYear}.",
   "pastDecade": {
-    "hospitals": <number>,
-    "schools": <number>,
-    "shoppingCenters": <number>,
-    "parks": <number>,
-    "residentialBlocks": <number>,
-    "techOffices": <number>,
-    "roadsKm": <number>,
-    "population": <number in thousands>
+    "greenCoverKm2": <number>,
+    "avgTempC": <number 26-34>,
+    "airQualityIndex": <number 70-180>,
+    "treeCount": <number thousands>,
+    "waterBodies": <number>,
+    "carbonTons": <number>,
+    "population": <number thousands>
   },
   "futureDecade": {
-    "hospitals": <number>,
-    "schools": <number>,
-    "shoppingCenters": <number>,
-    "parks": <number>,
-    "residentialBlocks": <number>,
-    "techOffices": <number>,
-    "roadsKm": <number>,
-    "population": <number in thousands>
+    "greenCoverKm2": <number less than past>,
+    "avgTempC": <number past+1.5 to +3.5>,
+    "airQualityIndex": <number past+20 to +80>,
+    "treeCount": <number less>,
+    "waterBodies": <number less>,
+    "carbonTons": <number higher>,
+    "population": <number higher>
+  },
+  "greenFuture": {
+    "greenCoverKm2": <number higher than past with intervention>,
+    "avgTempC": <number 1-2C cooler than dystopia>,
+    "airQualityIndex": <number lower>,
+    "treeCount": <number higher>,
+    "coolingDegrees": <number 1.5-3>,
+    "carbonSavedTons": <number>
   },
   "hotspots": [
     {
-      "type": "main_street|residential|healthcare|education|green_space|tech_hub",
-      "name": "Descriptive name for this area",
-      "description": "What this area looks like in ${futureYear}",
+      "type": "heat_island|vanishing_green|flood_zone|air_corridor|eco_restored|water_stress",
+      "name": "Descriptive eco-name",
+      "description": "What this looks like in ${futureYear} - dystopian or regenerated",
       "confidence": 0.0-1.0,
-      "growthFactor": 1.0-5.0
+      "growthFactor": 1.0-5.0,
+      "impact": "e.g. '+3.1°C hotter, 40% tree loss'",
+      "intervention": "e.g. 'Cool roofs + Miyawaki forest saves 2°C'"
     }
   ],
   "keyInsights": [
-    "Insight 1 about infrastructure growth",
-    "Insight 2 about population changes",
-    "Insight 3 about environmental impact"
+    "Insight about heat island / green loss",
+    "Insight about flood/water stress",
+    "Insight about what 1 intervention would save"
+  ],
+  "interventions": [
+    "Top 3 AI-recommended nature-based solutions for this location"
   ]
 }
 
 Rules:
-- Numbers must be realistic for a mid-sized urban district (population 50k-500k range).
-- Past decade should show moderate growth.
-- Future decade should show accelerated growth (1.5x-3x depending on NDBI slope).
-- Generate exactly 4-6 hotspots covering different scene types.
-- Focus on modern, clean, and realistic urban evolution. Avoid "sci-fi" or "overly futuristic" elements like holographic displays, drone docks, or autonomous flying vehicles. Instead, emphasize improved infrastructure, better urban planning, and sustainable modern architecture.
-- Use vivid, specific descriptions for each hotspot.
-- Confidence scores should reflect urban density (higher density = higher confidence).`;
+- Past numbers realistic for Indian mid-size district.
+- futureDecade (dystopia) must be WORSE: less green, hotter, worse AQI.
+- greenFuture must show hope: more green, cooler, better AQI with specific interventions.
+- Generate exactly 5-6 hotspots, must include at least 1 eco_restored (hope).
+- Confidence high where density high.
+- Be vivid, specific, local to ${locationName}.`;
 
   try {
     const result = await genAI.models.generateContent({
@@ -116,126 +113,151 @@ Rules:
       }
     }
 
-    // Extract JSON from response
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('No JSON found in AI response');
 
     const report = JSON.parse(jsonMatch[0]);
 
-    // Validate and normalize
     report.pastDecade = report.pastDecade || {};
     report.futureDecade = report.futureDecade || {};
+    report.greenFuture = report.greenFuture || {};
     report.hotspots = (report.hotspots || []).map((h, i) => ({
       ...h,
       id: `${h.type}_${i}`,
-      type: SCENE_TYPES.find(st => st.id === h.type) ? h.type : 'main_street',
+      type: SCENE_TYPES.find(st => st.id === h.type) ? h.type : 'vanishing_green',
     }));
     report.keyInsights = report.keyInsights || [];
+    report.interventions = report.interventions || [];
 
     return report;
   } catch (err) {
-    console.error('Gemini report generation failed:', err.message);
-    return generateFallbackReport(lat, lng, ndbiTrend, urbanDensity, locationName);
+    console.error('Gemini eco-report generation failed:', err.message);
+    return generateFallbackReport(lat, lng, ndbiTrend, urbanDensity, locationName, extraMetrics);
   }
 }
 
-function generateFallbackReport(lat, lng, ndbiTrend, urbanDensity, locationName) {
+function generateFallbackReport(lat, lng, ndbiTrend, urbanDensity, locationName, extraMetrics = {}) {
   const density = urbanDensity || 45;
   const slope = ndbiTrend && ndbiTrend.length > 1
     ? (ndbiTrend[ndbiTrend.length - 1] - ndbiTrend[0]) / ndbiTrend.length
     : 0.02;
-  const growthMultiplier = 1.3 + Math.abs(slope) * 50;
-  const basePop = Math.round(80 + (density * 2));
+  const greenCoverBase = Math.max(8, 42 - density * 0.35);
+  const tempBase = 29 + density * 0.04;
+  const aqiBase = 85 + density * 1.2;
 
   const past = {
-    hospitals: Math.round(2 + density / 30),
-    schools: Math.round(5 + density / 15),
-    shoppingCenters: Math.round(3 + density / 20),
-    parks: Math.round(4 + density / 25),
-    residentialBlocks: Math.round(20 + density / 2),
-    techOffices: Math.round(1 + density / 40),
-    roadsKm: Math.round(15 + density / 3),
-    population: basePop,
+    greenCoverKm2: Math.round(greenCoverBase * 1.3 * 10) / 10,
+    avgTempC: Math.round((tempBase - 1.2) * 10) / 10,
+    airQualityIndex: Math.round(aqiBase - 18),
+    treeCount: Math.round((120 + (60 - density)) * 10) / 10,
+    waterBodies: Math.round(6 + (50 - density) / 15),
+    carbonTons: Math.round(180 + density * 3),
+    population: Math.round(80 + density * 1.8),
   };
 
-  const future = {
-    hospitals: Math.round(past.hospitals * growthMultiplier),
-    schools: Math.round(past.schools * growthMultiplier * 0.9),
-    shoppingCenters: Math.round(past.shoppingCenters * growthMultiplier * 1.2),
-    parks: Math.round(past.parks * growthMultiplier * 0.8),
-    residentialBlocks: Math.round(past.residentialBlocks * growthMultiplier),
-    techOffices: Math.round(past.techOffices * growthMultiplier * 1.5),
-    roadsKm: Math.round(past.roadsKm * growthMultiplier * 1.1),
-    population: Math.round(basePop * growthMultiplier),
+  const dystopia = {
+    greenCoverKm2: Math.round(past.greenCoverKm2 * 0.62 * 10) / 10,
+    avgTempC: Math.round((past.avgTempC + 2.4 + Math.abs(slope)*30) * 10) / 10,
+    airQualityIndex: Math.round(past.airQualityIndex * 1.45),
+    treeCount: Math.round(past.treeCount * 0.58 * 10) / 10,
+    waterBodies: Math.max(1, Math.round(past.waterBodies * 0.7)),
+    carbonTons: Math.round(past.carbonTons * 1.6),
+    population: Math.round(past.population * 1.35),
+  };
+
+  const greenFuture = {
+    greenCoverKm2: Math.round(past.greenCoverKm2 * 1.45 * 10) / 10,
+    avgTempC: Math.round((past.avgTempC - 0.6) * 10) / 10,
+    airQualityIndex: Math.round(past.airQualityIndex * 0.72),
+    treeCount: Math.round(past.treeCount * 1.6 * 10) / 10,
+    coolingDegrees: 2.2,
+    carbonSavedTons: Math.round(past.carbonTons * 0.45),
   };
 
   return {
-    summary: `Satellite analysis of ${locationName || 'this district'} reveals steady urban expansion from 2016-2026. By 2036, accelerated construction is projected to transform the area into a dense mixed-use hub with expanded healthcare, education, and commercial corridors.`,
+    summary: `Satellite analysis of ${locationName || 'this district'} shows ${Math.round((1 - dystopia.greenCoverKm2/past.greenCoverKm2)*100)}% green cover lost from 2016-2026 with +${(dystopia.avgTempC - past.avgTempC).toFixed(1)}°C warming. By 2036, dystopian sprawl drives ${dystopia.airQualityIndex} AQI and critical water stress — but Miyawaki forests + cool roofs + wetland restoration could cool ${greenFuture.coolingDegrees}°C and save ${greenFuture.carbonSavedTons} tons CO₂.`,
     pastDecade: past,
-    futureDecade: future,
+    futureDecade: dystopia,
+    greenFuture,
     hotspots: [
       {
-        id: 'main_street_0',
-        type: 'main_street',
-        name: 'Central Market Avenue',
-        description: `A bustling 2036 commercial street with modern storefronts, wide pedestrian sidewalks, and improved urban infrastructure.`,
+        id: 'vanishing_green_0',
+        type: 'vanishing_green',
+        name: 'Lost Canopy Corridor',
+        description: `2036 dystopia: Once-lush avenue now 38% barren, trees replaced by heat-trapping concrete. Regenerated: Miyawaki forest cools 2.4°C.`,
+        confidence: 0.88,
+        growthFactor: 2.6,
+        impact: '-41% canopy, +2.8°C',
+        intervention: 'Miyawaki micro-forest + native trees',
+      },
+      {
+        id: 'heat_island_0',
+        type: 'heat_island',
+        name: 'Heat Dome Junction',
+        description: `Asphalt junction radiating 44°C surface temp in 2036. Cool-roof + reflective pavements cut 3.1°C.`,
         confidence: 0.85,
-        growthFactor: 2.5,
+        growthFactor: 2.9,
+        impact: '+3.1°C LST, AQI 178',
+        intervention: 'Cool roofs + permeable pavements',
       },
       {
-        id: 'residential_0',
-        type: 'residential',
-        name: 'Skyline Residences',
-        description: `Modern residential complexes with clean architectural lines, green balconies, and well-planned community spaces.`,
+        id: 'flood_zone_0',
+        type: 'flood_zone',
+        name: 'Flood-Prone Basin',
+        description: `Concrete drains overflow in monsoon 2036, 0.8m inundation. Restored wetlands absorb 60% runoff.`,
         confidence: 0.78,
-        growthFactor: 3.0,
+        growthFactor: 2.2,
+        impact: 'Flood depth +60%',
+        intervention: 'Revive lakes + bioswales',
       },
       {
-        id: 'healthcare_0',
-        type: 'healthcare',
-        name: 'Metro General Medical Campus',
-        description: `A modern, expanded hospital campus with advanced medical facilities, glass-and-steel architecture, and peaceful healing gardens.`,
+        id: 'air_corridor_0',
+        type: 'air_corridor',
+        name: 'Smog Corridor',
+        description: `Traffic artery choked: PM2.5 148 µg/m³ in 2036. EV lanes + green buffer cuts 42% pollution.`,
+        confidence: 0.81,
+        growthFactor: 2.4,
+        impact: 'AQI 168, PM2.5 x2.3',
+        intervention: 'Green buffer + EV Transit',
+      },
+      {
+        id: 'eco_restored_0',
+        type: 'eco_restored',
+        name: 'Regenerated Oasis',
+        description: `Hope vision 2036: Restored park with 3x biodiversity, community forest, clean lake swimming.`,
         confidence: 0.72,
-        growthFactor: 1.8,
+        growthFactor: 3.2,
+        impact: '+58% biodiversity',
+        intervention: 'Community stewardship + lake revival',
       },
       {
-        id: 'education_0',
-        type: 'education',
-        name: 'Future Learning Academy',
-        description: `A contemporary educational campus with open-air learning spaces, modern architecture, and integrated digital facilities.`,
-        confidence: 0.68,
-        growthFactor: 2.0,
-      },
-      {
-        id: 'green_space_0',
-        type: 'green_space',
-        name: 'Eco-Park Central',
-        description: `A beautifully landscaped urban park with paved trails, community seating, and lush greenery integrated into the city.`,
-        confidence: 0.65,
-        growthFactor: 1.5,
-      },
-      {
-        id: 'tech_hub_0',
-        type: 'tech_hub',
-        name: 'Innovation District',
-        description: `A sophisticated business district with modern glass-and-steel office buildings, landscaped plazas, and efficient transit links.`,
-        confidence: 0.70,
-        growthFactor: 2.8,
+        id: 'water_stress_0',
+        type: 'water_stress',
+        name: 'Depleting Aquifer Zone',
+        description: `Groundwater -12m in 2036, borewells dry. Rain harvesting + recharge pits restore 40% level.`,
+        confidence: 0.76,
+        growthFactor: 1.9,
+        impact: '-12m water table',
+        intervention: 'Rain gardens + recharge wells',
       },
     ],
     keyInsights: [
-      `Residential density projected to increase ${Math.round((future.residentialBlocks / past.residentialBlocks - 1) * 100)}% with modern multi-story housing.`,
-      `Healthcare infrastructure expanding to ${future.hospitals} facilities to serve a population of ${future.population}k residents.`,
-      `Commercial corridors transforming into modern pedestrian-friendly zones with improved urban infrastructure.`,
+      `Green cover collapsing ${(past.greenCoverKm2 - dystopia.greenCoverKm2).toFixed(1)} km² lost — direct heat island driver (+${(dystopia.avgTempC - past.avgTempC).toFixed(1)}°C).`,
+      `Air quality tipping to ${dystopia.airQualityIndex} AQI; cool roofs + urban forest would drop to ${greenFuture.airQualityIndex}.`,
+      `Wetland loss caused flood risk +60%; restoring 2 lakes + Miyawaki cuts peak flood by half and saves ${greenFuture.carbonSavedTons}t CO₂.`,
+    ],
+    interventions: [
+      'Miyawaki dense forest corridors (cools 2-3°C, fastest green cover)',
+      'Cool roofs + high-albedo pavements on heat domes',
+      'Revive urban lakes + bioswales for flood & recharge',
     ],
   };
 }
 
 export function computeNodePositions(hotspots, centerLat, centerLng) {
-  // Arrange hotspots in a hexagonal/flower pattern around the center
   const positions = [];
   const radiusMeters = 200;
-  const earthRadius = 111320; // meters per degree at equator
+  const earthRadius = 111320;
 
   hotspots.forEach((hotspot, i) => {
     const angle = (i / hotspots.length) * 2 * Math.PI - Math.PI / 2;

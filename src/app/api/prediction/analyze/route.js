@@ -6,89 +6,57 @@ import { v4 as uuidv4 } from 'uuid';
 import { generateComprehensiveAnalysis, generateFutureProjectionPrompt } from '@/lib/gemini';
 import { runSimulation } from '@/lib/simulationModel';
 import { synthesizeScenePanoramas } from '@/lib/predictionSynthesis';
+import { generateUrbanReport } from '@/lib/predictionReport';
+import { getEcoMetrics } from '@/lib/earthEngine';
 
 const currentYear = new Date().getFullYear();
 const FUTURE_YEAR = currentYear + 10;
 const START_YEAR = currentYear - 10;
 const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
 
-function buildPastFutureSummary(placeName, report) {
+function buildEcoSummary(placeName, report, simulation) {
   const loc = placeName || 'this district';
   const past = report?.pastDecade || {};
   const future = report?.futureDecade || {};
-  const pastText = `${START_YEAR}-${currentYear}: ${loc} shows steady urban expansion with ` +
-    `hospitals ${past.hospitals ?? '—'}, schools ${past.schools ?? '—'}, ` +
-    `shopping centers ${past.shoppingCenters ?? '—'}, parks ${past.parks ?? '—'} ` +
-    `and residential blocks ${past.residentialBlocks ?? '—'}.`;
-  const futureTextBase = `By ${FUTURE_YEAR}, predictive analysis forecasts for ${loc} project ` +
-    `hospitals ${future.hospitals ?? '—'}, schools ${future.schools ?? '—'}, ` +
-    `shopping centers ${future.shoppingCenters ?? '—'}, parks ${future.parks ?? '—'} ` +
-    `and roads ~${future.roadsKm ?? '—'} km (population ~${future.population ?? '—'}k).`;
+  const green = report?.greenFuture || {};
+  const pastText = `${START_YEAR}-${currentYear}: ${loc} had ${past.greenCoverKm2 ?? '—'} km² green cover, ${past.avgTempC ?? '—'}°C avg temp, AQI ${past.airQualityIndex ?? '—'}, ${past.treeCount ?? '—'}k trees, ${past.waterBodies ?? '—'} water bodies.`;
+  const dystopiaText = `DYSTOPIA ${FUTURE_YEAR} (if we do nothing): Green ${future.greenCoverKm2 ?? '—'} km² (-${past.greenCoverKm2 && future.greenCoverKm2 ? Math.round((1-future.greenCoverKm2/past.greenCoverKm2)*100):'40'}%), Temp ${future.avgTempC ?? '—'}°C (+${future.avgTempC && past.avgTempC ? (future.avgTempC-past.avgTempC).toFixed(1):'2.4'}°C), AQI ${future.airQualityIndex ?? '—'}, Trees ${future.treeCount ?? '—'}k.`;
+  const hopeText = `GREEN FUTURE ${FUTURE_YEAR} (if we act): Green ${green.greenCoverKm2 ?? '—'} km², Temp ${green.avgTempC ?? '—'}°C (-${green.coolingDegrees ?? '2.2'}°C cooling), AQI ${green.airQualityIndex ?? '—'}, Carbon saved ${green.carbonSavedTons ?? '—'}t.`;
   const narrative = report?.summary ? ` ${report.summary}` : '';
-  return { past: pastText, future: `${futureTextBase}${narrative}` };
+  return { past: pastText, dystopia: dystopiaText, hope: hopeText, future: `${dystopiaText} ${hopeText}${narrative}`, insights: report?.keyInsights || [], interventions: report?.interventions || [] };
 }
 
 function createNormalizedHotspots(hotspots, placeName) {
   const list = Array.isArray(hotspots) ? hotspots : [];
-  const requiredTypes = ['residential', 'healthcare', 'education', 'green_space', 'tech_hub'];
-  const mainStreets = list.filter((h) => h?.type === 'main_street');
-  const mainA = mainStreets[0] || {
-    id: 'main_street_0',
-    type: 'main_street',
-    name: `Central Transit Street (${placeName || FUTURE_YEAR})`,
-    description: `A pedestrian-friendly main commercial corridor with smart storefronts and transit guidance in ${FUTURE_YEAR}.`,
-    confidence: 0.75,
-    growthFactor: 2.4,
-  };
-  const mainB = mainStreets[1] || {
-    ...mainA,
-    id: 'main_street_1',
-    name: `Secondary Market Connector (${placeName || FUTURE_YEAR})`,
-    description: `A connected secondary street spine linking districts to the main mobility artery in ${FUTURE_YEAR}.`,
-    confidence: clamp((mainA.confidence ?? 0.75) - 0.05, 0.4, 0.97),
-    growthFactor: clamp((mainA.growthFactor ?? 2.4) * 0.9, 1, 5),
-  };
+  const requiredTypes = ['heat_island', 'vanishing_green', 'flood_zone', 'air_corridor', 'eco_restored', 'water_stress'];
   const byType = new Map(list.map((h) => [h.type, h]));
-  const other = requiredTypes.map((t, i) => {
+  return requiredTypes.map((t, i) => {
     const existing = byType.get(t);
     if (existing) return existing;
-    const fallbackNames = {
-      residential: `Skyline Residences`,
-      healthcare: `Metro Healthcare Campus`,
-      education: `Future Learning Academy`,
-      green_space: `Eco-Park Central`,
-      tech_hub: `Innovation District`,
+    const fallback = {
+      heat_island: { name: `Heat Dome Junction (${placeName || FUTURE_YEAR})`, description: `44°C heat island in dystopian ${FUTURE_YEAR}. Cool roofs cut 3.1°C.`, confidence: 0.85, growthFactor: 2.9 },
+      vanishing_green: { name: `Lost Canopy Corridor`, description: `Green belt vanished -41% by ${FUTURE_YEAR}. Miyawaki restores.`, confidence: 0.88, growthFactor: 2.6 },
+      flood_zone: { name: `Flood Basin`, description: `Wetland loss -> 0.8m floods in ${FUTURE_YEAR}. Bioswales save.`, confidence: 0.78, growthFactor: 2.2 },
+      air_corridor: { name: `Smog Corridor`, description: `AQI 168 haze in ${FUTURE_YEAR}. Green buffer cleans 42%.`, confidence: 0.81, growthFactor: 2.4 },
+      eco_restored: { name: `Regenerated Oasis (HOPE)`, description: `Green future ${FUTURE_YEAR}: Lush forest, cool lake, 3x biodiversity.`, confidence: 0.72, growthFactor: 3.2 },
+      water_stress: { name: `Dry Aquifer Zone`, description: `Water table -12m by ${FUTURE_YEAR}. Recharge pits restore 40%.`, confidence: 0.76, growthFactor: 1.9 },
     };
-    return {
-      id: `${t}_${i}`,
-      type: t,
-      name: `${fallbackNames[t] || t} (${placeName || FUTURE_YEAR})`,
-      description: `A predicted ${t.replace('_', ' ')} zone in ${FUTURE_YEAR} built from the last decade's satellite trends.`,
-      confidence: 0.66,
-      growthFactor: 2.0,
-    };
-  });
-  return [mainA, mainB, ...other].slice(0, 7);
+    const f = fallback[t];
+    return { id: `${t}_${i}`, type: t, name: f.name, description: f.description, confidence: f.confidence, growthFactor: f.growthFactor };
+  }).slice(0, 6);
 }
 
 function computeNodePositions(normalizedHotspots, lat, lng) {
   const baseOffsetX = 500;
   const baseOffsetY = 350;
   const count = Array.isArray(normalizedHotspots) ? normalizedHotspots.length : 0;
-  
-  console.log('[API] computeNodePositions called with', count, 'hotspots');
-  
-  // Arrange nodes in a circle around center
   const nodes = normalizedHotspots.map((hotspot, i) => {
     const angle = (i / Math.max(count, 1)) * 2 * Math.PI;
     const radius = 200;
     let x = baseOffsetX + Math.cos(angle) * radius;
     let y = baseOffsetY + Math.sin(angle) * radius;
-    
-    // Defensive: ensure valid numbers
     if (!Number.isFinite(x)) x = baseOffsetX + i * 100;
     if (!Number.isFinite(y)) y = baseOffsetY + ((i % 2) * 100);
-    
     return {
       id: uuidv4(),
       label: `${FUTURE_YEAR}: ${hotspot?.name || hotspot?.type || 'Unknown'}`,
@@ -106,10 +74,10 @@ function computeNodePositions(normalizedHotspots, lat, lng) {
       predictionType: hotspot?.type || 'unknown',
       geojsonHotspots: null,
       ndbiTrend: [],
+      ndviTrend: [],
+      lstTrend: [],
     };
   });
-  
-  console.log('[API] Generated', nodes.length, 'nodes. Positions:', nodes.map(n => ({x: n.position.x, y: n.position.y})));
   return nodes;
 }
 
@@ -117,89 +85,63 @@ export async function POST(req) {
   try {
     const { userId: authUserId } = await auth();
     const isAgentBypass = req.headers.get('bypass-auth') === 'true' || req.cookies.get('bypass-auth')?.value === 'true';
-    
-    // We expect the agent to pass userId in the body when bypassing
     const body = await req.json();
     const { lat, lng, placeName, worldId, userId: bodyUserId } = body;
-    
     const userId = authUserId || (isAgentBypass ? bodyUserId : null);
-
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    
-    // Validate JSON parsing and request format
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     if (typeof lat !== 'number' || typeof lng !== 'number' || typeof placeName !== 'string') {
       return NextResponse.json({ error: 'Invalid request format' }, { status: 400 });
     }
-
     await connectDB();
-
-    // 1) Generate comprehensive analysis using Gemini 3 Flash Preview
-    console.log('[API] Step 1: Starting Gemini analysis...');
+    console.log('[Earth API] Step 1: Eco-analysis...');
     const analysis = await generateComprehensiveAnalysis(placeName, lat, lng);
     if (!analysis.success) {
-      console.error('[API] Step 1 FAILED:', analysis.error);
-      return NextResponse.json({ error: 'Analysis failed', details: analysis.error }, { status: 500 });
+      console.error('[Earth API] Analysis FAILED:', analysis.error);
+      return NextResponse.json({ error: 'Eco-analysis failed', details: analysis.error }, { status: 500 });
     }
-    console.log('[API] Step 1: Analysis complete');
-
-    // Extract insights for simulation
     const gdpInsights = analysis.gdpInsights;
     const locationInsights = analysis.locationInsights;
-
-    // 2) Run simulation model using Gemini insights
-    console.log('[API] Step 2: Running simulation...');
+    console.log('[Earth API] Step 2: Trying REAL GEE fetch (NDVI/NDBI/LST)...');
+    let geeReal = null;
+    try {
+      geeReal = await getEcoMetrics(lat, lng);
+      if (geeReal) console.log('[Earth API] GEE REAL success:', geeReal.ndviTrend.length, 'years, NDVI', geeReal.ndviTrend[0].toFixed(3)+'→'+geeReal.ndviTrend.slice(-1)[0].toFixed(3));
+    } catch (e) { console.warn('[Earth API] GEE error:', e.message); }
+    console.log('[Earth API] Step 2b: Running eco-simulation (fallback/enrich)...');
     const simulation = await runSimulation(placeName, lat, lng, locationInsights, gdpInsights);
-    console.log('[API] Step 2: Simulation complete');
-    
-    // Extract simulation results for compatibility
-    const urbanDensity = simulation.urbanDensity;
-    const confidence = simulation.confidence;
-    const ndbiTrend = simulation.ndbiTrend;
-    const geojsonHotspots = null;
-
-    // 3) Use simulation-generated hotspots
-    console.log('[API] Step 3: Normalizing hotspots...');
+    const urbanDensity = geeReal?.urbanDensity ?? simulation.urbanDensity;
+    const confidence = geeReal ? 0.88 : simulation.confidence;
+    const ndbiTrend = geeReal?.ndbiTrend ?? simulation.ndbiTrend;
+    const ndviTrend = geeReal?.ndviTrend ?? simulation.ndviTrend;
+    const lstTrend = geeReal?.lstTrend ?? simulation.lstTrend;
+    const greenCover = geeReal?.greenCover ?? simulation.greenCover;
+    const waterStress = geeReal?.waterStress ?? simulation.waterStress;
+    const geeSource = geeReal ? 'GEE_REAL' : 'SIMULATED';
+    console.log('[Earth API] Step 3: Generating eco-report via Gemini...');
+    let ecoReport = null;
+    try {
+      ecoReport = await generateUrbanReport(lat, lng, ndbiTrend, urbanDensity, placeName, { ndviTrend, lstTrend, greenCover, waterStress });
+      console.log('[Earth API] Eco-report done:', ecoReport.summary?.slice(0,80));
+    } catch (e) {
+      console.warn('[Earth API] Eco-report fallback:', e.message);
+    }
     const simulationHotspots = simulation.hotspots || [];
-
-    // 4) Normalize hotspots => predictable set of nodes (2 streets + other districts)
     const normalizedHotspots = createNormalizedHotspots(simulationHotspots, placeName);
-    console.log('[API] Step 4: Hotspots normalized, count:', normalizedHotspots.length);
-
-    // 5) Generate panoramic images using simulation results
-    console.log('[API] Step 5: Starting image generation...');
+    console.log('[Earth API] Step 4: Hotspots', normalizedHotspots.length, normalizedHotspots.map(h=>h.type));
+    console.log('[Earth API] Step 5: Synthesizing eco-panoramas (dystopia + hope)...');
     let panoResults;
     try {
       panoResults = await synthesizeScenePanoramas({
-        lat,
-        lng,
-        urbanDensity,
-        confidence,
-        ndbiTrend,
-        locationName: placeName,
-        hotspots: normalizedHotspots,
+        lat, lng, urbanDensity, confidence, ndbiTrend, ndviTrend, lstTrend, greenCover, waterStress,
+        locationName: placeName, hotspots: normalizedHotspots,
       });
-      console.log('[API] Step 5: Image generation complete, count:', panoResults?.length);
+      console.log('[Earth API] Panoramas done:', panoResults?.length);
     } catch (imgErr) {
-      console.error('[API] Step 5 FAILED:', imgErr.message);
-      // Continue without images - set empty results
-      panoResults = normalizedHotspots.map(h => ({
-        hotspotId: h.id,
-        type: h.type,
-        url: '',
-        publicId: '',
-        generated: false,
-        error: imgErr.message
-      }));
+      console.error('[Earth API] Image FAILED:', imgErr.message);
+      panoResults = normalizedHotspots.map(h => ({ hotspotId: h.id, type: h.type, url: '', publicId: '', generated: false, error: imgErr.message }));
     }
-
     const panoByHotspotId = new Map((panoResults || []).map((r) => [r.hotspotId, r]));
-
-    // 6) Generate nodes with positions and update with panorama data
     let predictedNodes = computeNodePositions(normalizedHotspots, lat, lng);
-    
-    // Update nodes with actual data from simulation and panoramas
     predictedNodes = predictedNodes.map((node, i) => {
       const hotspot = normalizedHotspots[i];
       const pano = panoByHotspotId.get(hotspot.id) || {};
@@ -207,80 +149,46 @@ export async function POST(req) {
       const growthFactor = typeof hotspot.growthFactor === 'number' && !isNaN(hotspot.growthFactor) ? hotspot.growthFactor : 1;
       const baseDensity = typeof urbanDensity === 'number' && !isNaN(urbanDensity) ? urbanDensity : 45;
       const urbanDensityForNode = clamp(Math.round(baseDensity * clamp(growthFactor / 2, 0.6, 1.8)), 0, 100);
-      const baseConfidence = typeof hotspot?.confidence === 'number' && !isNaN(hotspot.confidence) ? hotspot.confidence : 
-                             (typeof confidence === 'number' && !isNaN(confidence) ? confidence : 0.7);
-      const predictionConfidenceForNode = clamp(baseConfidence, 0, 1);
-
+      const baseConfidence = typeof hotspot?.confidence === 'number' && !isNaN(hotspot.confidence) ? hotspot.confidence : (typeof confidence === 'number' && !isNaN(confidence) ? confidence : 0.78);
       return {
         ...node,
         panoramaUrl: generated ? (pano.url || '') : '',
         panoramaPublicId: generated ? (pano.publicId || '') : '',
         status: generated ? 'ready' : 'empty',
         urbanDensity: urbanDensityForNode,
-        predictionConfidence: predictionConfidenceForNode,
-        geojsonHotspots: i === 0 ? (geojsonHotspots || null) : null,
+        predictionConfidence: clamp(baseConfidence, 0, 1),
+        geojsonHotspots: i === 0 ? null : null,
         ndbiTrend: ndbiTrend || [],
+        ndviTrend: ndviTrend || [],
+        lstTrend: lstTrend || [],
+        ecoImpact: hotspot.impact || '',
+        ecoIntervention: hotspot.intervention || '',
       };
     });
 
-    // 7) Create a connected "city graph": streets => districts => internal links
     const predictedEdges = [];
-    const connect = (a, b) => {
-      if (!a || !b || a.id === b.id) return;
-      predictedEdges.push({ id: uuidv4(), source: a.id, target: b.id });
-    };
+    const connect = (a, b) => { if (!a || !b || a.id === b.id) return; predictedEdges.push({ id: uuidv4(), source: a.id, target: b.id }); };
+    const vanishing = predictedNodes.find(n=>n.predictionType==='vanishing_green');
+    const heat = predictedNodes.find(n=>n.predictionType==='heat_island');
+    const flood = predictedNodes.find(n=>n.predictionType==='flood_zone');
+    const air = predictedNodes.find(n=>n.predictionType==='air_corridor');
+    const oasis = predictedNodes.find(n=>n.predictionType==='eco_restored');
+    const water = predictedNodes.find(n=>n.predictionType==='water_stress');
+    connect(vanishing, heat);
+    connect(heat, air);
+    connect(flood, water);
+    connect(vanishing, oasis);
+    connect(flood, oasis);
+    connect(air, oasis);
+    connect(water, oasis);
 
-    const mainStreetsNodes = predictedNodes.filter((n) => n.predictionType === 'main_street');
-    const otherNodes = predictedNodes.filter((n) => n.predictionType !== 'main_street');
-
-    if (mainStreetsNodes.length >= 2) {
-      connect(mainStreetsNodes[0], mainStreetsNodes[1]);
-    }
-
-    // Attach every district to one of the street spines.
-    otherNodes.forEach((node, idx) => {
-      const targetStreet = mainStreetsNodes[idx % Math.max(1, mainStreetsNodes.length)] || mainStreetsNodes[0] || predictedNodes[0];
-      connect(targetStreet, node);
-    });
-
-    // Internal connections (roads between "places")
-    const residential = predictedNodes.find((n) => n.predictionType === 'residential');
-    const healthcare = predictedNodes.find((n) => n.predictionType === 'healthcare');
-    const education = predictedNodes.find((n) => n.predictionType === 'education');
-    const greenSpace = predictedNodes.find((n) => n.predictionType === 'green_space');
-    const techHub = predictedNodes.find((n) => n.predictionType === 'tech_hub');
-
-    connect(residential, healthcare);
-    connect(residential, techHub);
-    connect(healthcare, education);
-    connect(greenSpace, residential);
-    connect(techHub, education);
-
-    // 8) Persist as a brand-new predicted world (do not mutate the source world)
     const cityName = (placeName || 'Unknown').split(',')[0].trim().replace(/\s+/g, '_');
-    const baseName = `${cityName}_Prediction`;
-    const description = `Decade 2.0 predicted world generated from ${placeName || 'selected zone'} at (${lat.toFixed(4)}, ${lng.toFixed(4)}) on ${new Date().toLocaleDateString()}.`;
-
-    // Validate nodes before saving - ensure ALL numeric fields are valid
-    console.log('[API] Validating', predictedNodes.length, 'nodes before save...');
+    const baseName = `${cityName}_Earth2036`;
+    const description = `🌍 EARTH LENS 2036 — Eco-prediction for ${placeName || 'selected zone'} at (${lat.toFixed(4)}, ${lng.toFixed(4)}). Dystopia vs Green Future. NDVI ${ndviTrend[0].toFixed(2)}→${ndviTrend[ndviTrend.length-1].toFixed(2)}, LST +${(lstTrend[lstTrend.length-1]-lstTrend[0]).toFixed(1)}°C. Generated ${new Date().toLocaleDateString()}.`;
     const validatedNodes = predictedNodes.map((n, idx) => {
-      let x = n?.position?.x;
-      let y = n?.position?.y;
-      
-      // Defensive: fix any invalid positions
-      if (typeof x !== 'number' || !Number.isFinite(x)) {
-        console.error(`[API] Node ${idx} has invalid x:`, x, '- using fallback');
-        x = 500 + (idx * 100);
-      }
-      if (typeof y !== 'number' || !Number.isFinite(y)) {
-        console.error(`[API] Node ${idx} has invalid y:`, y, '- using fallback');
-        y = 350 + ((idx % 2) * 100);
-      }
-      
-      const urbanDensity = typeof n?.urbanDensity === 'number' && !isNaN(n.urbanDensity) ? n.urbanDensity : 45;
-      const predictionConfidence = typeof n?.predictionConfidence === 'number' && !isNaN(n.predictionConfidence) ? n.predictionConfidence : 0.7;
-      
-      // Build clean node object matching schema exactly
+      let x = n?.position?.x; let y = n?.position?.y;
+      if (typeof x !== 'number' || !Number.isFinite(x)) x = 500 + (idx * 100);
+      if (typeof y !== 'number' || !Number.isFinite(y)) y = 350 + ((idx % 2) * 100);
       return {
         id: n.id || uuidv4(),
         label: n.label || `${FUTURE_YEAR}: Node ${idx}`,
@@ -292,51 +200,46 @@ export async function POST(req) {
         originalPanoramaPublicId: n.originalPanoramaPublicId || '',
         status: n.status || 'empty',
         predictionYear: n.predictionYear || FUTURE_YEAR,
-        urbanDensity,
-        predictionConfidence,
+        urbanDensity: typeof n?.urbanDensity === 'number' && !isNaN(n.urbanDensity) ? n.urbanDensity : 45,
+        predictionConfidence: typeof n?.predictionConfidence === 'number' && !isNaN(n.predictionConfidence) ? n.predictionConfidence : 0.78,
         isPredictionNode: true,
         predictionType: n.predictionType || 'unknown',
         geojsonHotspots: n.geojsonHotspots || null,
         ndbiTrend: Array.isArray(n.ndbiTrend) ? n.ndbiTrend : [],
       };
     });
-    console.log('[API] Validated nodes positions:', validatedNodes.map(n => ({x: n.position.x, y: n.position.y})));
-    
-    console.log('[API] Step 8: Saving world with', validatedNodes.length, 'nodes...');
+    console.log('[Earth API] Saving Earth world with', validatedNodes.length, 'eco-nodes...');
     let predictedWorld;
     try {
-      predictedWorld = await World.create({
-        userId,
-        name: baseName,
-        description,
-        isPredictionWorld: true,
-        nodes: validatedNodes,
-        edges: predictedEdges,
-      });
-      console.log('[API] Step 8: World saved successfully');
+      predictedWorld = await World.create({ userId, name: baseName, description, isPredictionWorld: true, nodes: validatedNodes, edges: predictedEdges });
+      console.log('[Earth API] Saved!');
     } catch (dbError) {
-      console.error('[API] Step 8 FAILED - Database error:', dbError.message);
-      console.error('[API] Validation errors:', dbError.errors);
+      console.error('[Earth API] DB error:', dbError.message, dbError.errors);
       throw dbError;
     }
-
-    // Build summary in format frontend expects
-    const summary = buildPastFutureSummary(placeName, analysis);
-    
+    const summary = ecoReport ? buildEcoSummary(placeName, ecoReport, simulation) : { past: analysis.analysis?.slice(0,300) || 'Eco analysis', future: 'Dystopia vs Hope 2036', dystopia: '', hope: '', insights: [], interventions: [] };
     return NextResponse.json({
       success: true,
       predictedWorldId: predictedWorld._id,
       nodesAdded: validatedNodes.length,
-      confidence: confidence || 0.7,
+      confidence: confidence || 0.78,
+      geeSource,
       summary: {
-        past: summary.past || analysis.analysis || 'Historical analysis of urban development over the past decade.',
-        future: summary.future || 'Predicted urban growth and infrastructure development for the next decade.'
+        past: summary.past,
+        future: summary.future,
+        dystopia: summary.dystopia,
+        hope: summary.hope,
+        insights: summary.insights,
+        interventions: summary.interventions,
+        ecoReport: ecoReport || null,
+        simulation: { ndbiTrend, ndviTrend, lstTrend, greenCover, waterStress, urbanDensity, geeSource }
       },
       world: predictedWorld,
       panoramas: panoResults,
+      mode: 'earth-2036'
     });
   } catch (error) {
     console.error('POST /api/prediction/analyze error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 });
   }
 }
