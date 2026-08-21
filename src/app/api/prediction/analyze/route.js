@@ -7,6 +7,7 @@ import { generateComprehensiveAnalysis, generateFutureProjectionPrompt } from '@
 import { runSimulation } from '@/lib/simulationModel';
 import { synthesizeScenePanoramas } from '@/lib/predictionSynthesis';
 import { generateUrbanReport } from '@/lib/predictionReport';
+import { getEcoMetrics } from '@/lib/earthEngine';
 
 const currentYear = new Date().getFullYear();
 const FUTURE_YEAR = currentYear + 10;
@@ -100,15 +101,22 @@ export async function POST(req) {
     }
     const gdpInsights = analysis.gdpInsights;
     const locationInsights = analysis.locationInsights;
-    console.log('[Earth API] Step 2: Running eco-simulation (NDBI+NDVI+LST)...');
+    console.log('[Earth API] Step 2: Trying REAL GEE fetch (NDVI/NDBI/LST)...');
+    let geeReal = null;
+    try {
+      geeReal = await getEcoMetrics(lat, lng);
+      if (geeReal) console.log('[Earth API] GEE REAL success:', geeReal.ndviTrend.length, 'years, NDVI', geeReal.ndviTrend[0].toFixed(3)+'→'+geeReal.ndviTrend.slice(-1)[0].toFixed(3));
+    } catch (e) { console.warn('[Earth API] GEE error:', e.message); }
+    console.log('[Earth API] Step 2b: Running eco-simulation (fallback/enrich)...');
     const simulation = await runSimulation(placeName, lat, lng, locationInsights, gdpInsights);
-    const urbanDensity = simulation.urbanDensity;
-    const confidence = simulation.confidence;
-    const ndbiTrend = simulation.ndbiTrend;
-    const ndviTrend = simulation.ndviTrend;
-    const lstTrend = simulation.lstTrend;
-    const greenCover = simulation.greenCover;
-    const waterStress = simulation.waterStress;
+    const urbanDensity = geeReal?.urbanDensity ?? simulation.urbanDensity;
+    const confidence = geeReal ? 0.88 : simulation.confidence;
+    const ndbiTrend = geeReal?.ndbiTrend ?? simulation.ndbiTrend;
+    const ndviTrend = geeReal?.ndviTrend ?? simulation.ndviTrend;
+    const lstTrend = geeReal?.lstTrend ?? simulation.lstTrend;
+    const greenCover = geeReal?.greenCover ?? simulation.greenCover;
+    const waterStress = geeReal?.waterStress ?? simulation.waterStress;
+    const geeSource = geeReal ? 'GEE_REAL' : 'SIMULATED';
     console.log('[Earth API] Step 3: Generating eco-report via Gemini...');
     let ecoReport = null;
     try {
@@ -215,6 +223,7 @@ export async function POST(req) {
       predictedWorldId: predictedWorld._id,
       nodesAdded: validatedNodes.length,
       confidence: confidence || 0.78,
+      geeSource,
       summary: {
         past: summary.past,
         future: summary.future,
@@ -223,7 +232,7 @@ export async function POST(req) {
         insights: summary.insights,
         interventions: summary.interventions,
         ecoReport: ecoReport || null,
-        simulation: { ndbiTrend, ndviTrend, lstTrend, greenCover, waterStress, urbanDensity }
+        simulation: { ndbiTrend, ndviTrend, lstTrend, greenCover, waterStress, urbanDensity, geeSource }
       },
       world: predictedWorld,
       panoramas: panoResults,

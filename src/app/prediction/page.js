@@ -4,6 +4,7 @@ import { Suspense, useState, useCallback } from 'react';
 import { GoogleMap, useJsApiLoader, Autocomplete, Marker, Polygon } from '@react-google-maps/api';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Search, Loader2, TrendingUp, Leaf, Activity, Thermometer, Droplets, Wind } from 'lucide-react';
+import EarthCharts from '@/components/EarthCharts';
 
 const libraries = ['places'];
 const mapContainerStyle = { width: '100%', height: '100vh' };
@@ -167,6 +168,12 @@ function PredictionInner() {
                 {predictionData.summary.hope || 'Miyawaki forests, cool roofs & lake revival cool 2.2°C, save tons of CO₂, cut floods by 60%.'}
               </p>
             </div>
+
+            {predictionData.summary?.simulation && (
+              <div style={{ padding: '14px', backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)' }}>
+                <EarthCharts simulation={predictionData.summary.simulation} ecoReport={predictionData.summary.ecoReport} />
+              </div>
+            )}
 
             {predictionData.summary?.insights?.length > 0 && (
               <div style={{ padding: '14px', backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)' }}>
