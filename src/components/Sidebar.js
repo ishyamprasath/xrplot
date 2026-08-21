@@ -98,7 +98,7 @@ export default function Sidebar() {
     <div className="app-sidebar desktop-sidebar">
       <div className="sidebar-header" onClick={() => router.push('/dashboard')}>
         {/* <img src="/logo.png" alt="XRPlot" className="brand-icon" style={{ width: 38, height: 28, borderRadius: 6 }} /> */}
-        <span className="brand-text">XRPlot</span>
+        <span className="brand-text">🌍 TerraPlot</span><span style={{fontSize:'9px', background:'linear-gradient(135deg,#10b981,#059669)', color:'#fff', padding:'2px 6px', borderRadius:'20px', marginLeft:'6px', fontWeight:800}}>EARTH 2036</span>
       </div>
 
       <div className="sidebar-content">
@@ -116,9 +116,9 @@ export default function Sidebar() {
             <Mic size={18} />
             <span>Voice Interface</span>
           </Link>
-          <Link href="/prediction" className={`sidebar-item ${pathname === '/prediction' ? 'active' : ''}`}>
+          <Link href="/prediction" className={`sidebar-item ${pathname === '/prediction' ? 'active' : ''}`} style={pathname==='/prediction'?{background:'rgba(16,185,129,0.12)', borderLeft:'3px solid #10b981'}:{}}>
             <History size={18} />
-            <span>Decade 2.0</span>
+            <span>🌍 Earth Lens 2036</span>
           </Link>
         </div>
 
@@ -233,7 +233,7 @@ export default function Sidebar() {
       </button>
       <Link href="/prediction" className={`mobile-footer-item ${pathname === '/prediction' ? 'active' : ''}`}>
         <History size={22} />
-        <span>Decade 2.0</span>
+        <span>Earth 2036</span>
       </Link>
     </div>
     </>

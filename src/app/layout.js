@@ -4,9 +4,9 @@ import ClerkThemeProvider from '@/components/ClerkThemeProvider';
 import SidebarWrapper from '@/components/SidebarWrapper';
 
 export const metadata = {
-  title: 'XRPlot',
-  description: 'Create immersive 360° virtual worlds from your photos. Upload room images, stitch panoramas with AI, and navigate connected spaces.',
-  keywords: ['360', 'virtual tour', 'panorama', 'world builder', 'VR'],
+  title: 'TerraPlot — Earth Lens 2036 | AI 4 Earth Hackathon',
+  description: '🌍 See your street in a +2°C world. XRPlot Earth Lens uses GEE satellites (NDVI/NDBI/LST), Gemini AI & 360° panoramas to visualize dystopia vs regenerative future for any location on Earth.',
+  keywords: ['AI 4 Earth', 'climate', 'NDVI', 'heat island', 'hackathon', 'earth engine', '360 panorama', 'gemini', 'sustainability', 'miyawaki'],
 };
 
 export default function RootLayout({ children }) {
