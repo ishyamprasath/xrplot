@@ -6,7 +6,11 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "node --test tests/**/*.test.js",
+    "test:earth": "node --test tests/earth.*.test.js tests/**/*.test.js",
+    "test:verbose": "node --test --test-reporter=spec tests/**/*.test.js",
+    "test:coverage": "node --test --experimental-test-coverage tests/**/*.test.js"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.63",

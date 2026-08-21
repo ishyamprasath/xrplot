@@ -1,0 +1,33 @@
+name: 🌍 Earth Lens — Automated Tests
+
+on:
+  push:
+    branches: [main, earth-hackathon]
+  pull_request:
+    branches: [main]
+
+jobs:
+  earth-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Lint
+        run: npm run lint --if-present || true
+      - name: Syntax check earth libs
+        run: |
+          node --check src/lib/predictionReport.js
+          node --check src/lib/simulationModel.js
+          node --check src/lib/gemini.js
+          node --check src/lib/earthEngine.js
+          echo "syntax ok"
+      - name: Unit + UI + E2E (node:test)
+        run: npm run test:earth
+      - name: Verbose report
+        if: failure()
+        run: npm run test:verbose
