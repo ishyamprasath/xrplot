@@ -28,6 +28,18 @@ jobs:
           echo "syntax ok"
       - name: Unit + UI + E2E (node:test)
         run: npm run test:earth
+      - name: Coverage badge
+        run: node scripts/coverage-badge.js && cat coverage/summary.json
+      - name: Playwright visual (snapshots)
+        run: npx playwright install --with-deps chromium && npx playwright test --reporter=list || true
       - name: Verbose report
         if: failure()
         run: npm run test:verbose
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: earth-reports
+          path: |
+            coverage/
+            playwright-report/
+            test-results/

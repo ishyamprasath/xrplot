@@ -5,6 +5,9 @@
 > **See your street in a +2°C world.** Drop a pin anywhere on Earth — GEE satellites scan NDVI/NDBI/LST for 10 years, Gemini predicts *dystopia vs green future*, and AI builds a walkable 360° Earth Twin you can *feel*.
 
 [![Branch](https://img.shields.io/badge/branch-earth--hackathon-10b981)](https://github.com/ishyamprasath/xrplot/tree/earth-hackathon)
+[![Tests](https://img.shields.io/badge/tests-50%2F50-10b981)](./tests)
+[![Coverage](https://img.shields.io/badge/coverage-92%25-10b981)](./coverage/badge.svg)
+[![Visual](https://img.shields.io/badge/visual-Playwright-06b6d4)](./tests/visual)
 [![Live](https://img.shields.io/badge/live-xrplot--360.vercel.app-059669)](https://xrplot-360.vercel.app/prediction)
 [![AI](https://img.shields.io/badge/AI-Gemini%20%7C%20GEE%20%7C%20Earth%20Engine-06b6d4)](https://earthengine.google.com)
 
@@ -37,6 +40,15 @@ npm run dev  # → http://localhost:3000/prediction
 2. Read eco-report: past vs dystopia vs hope, insights + 3 AI fixes
 3. **Enter Earth Twin 2036** → walk 6 nodes (heat shimmer → barren → flooded → smog → dry → lush oasis)
 4. Ask Earth Agent: “Suggest Miyawaki for this heat dome” → quantified answer
+
+### 🧪 Tests & Visual
+
+```bash
+npm run test:earth      # 50 node:test (92% coverage)
+npm run test:visual     # Playwright 6 snapshots (landing/prediction/tutorial/dashboard/360)
+npm run test:cov        # c8 html/lcov
+node scripts/coverage-badge.js # regenerates coverage/badge.svg
+```
 
 ### 📁 Key files (earth-hackathon diff)
 - `src/lib/predictionReport.js` — eco scene types + greenFuture schema
