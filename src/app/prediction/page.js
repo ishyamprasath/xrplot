@@ -3,8 +3,9 @@
 import { Suspense, useState, useCallback } from 'react';
 import { GoogleMap, useJsApiLoader, Autocomplete, Marker, Polygon } from '@react-google-maps/api';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Search, Loader2, TrendingUp, Leaf, Activity, Thermometer, Droplets, Wind } from 'lucide-react';
+import { ArrowLeft, Search, Loader2, TrendingUp, Leaf, Activity, Thermometer, Droplets, Wind, Zap, HelpCircle } from 'lucide-react';
 import EarthCharts from '@/components/EarthCharts';
+import EarthTutorial from '@/components/EarthTutorial';
 
 const libraries = ['places'];
 const mapContainerStyle = { width: '100%', height: '100vh' };
@@ -66,27 +67,51 @@ function PredictionInner() {
     }
   };
 
+  const JUDGE_DEMO = { lat: 28.6139, lng: 77.2090, placeName: 'Delhi, India (Demo)' };
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [progress, setProgress] = useState(0);
+
+  const handleDemo = async () => {
+    const demoPin = { lat: JUDGE_DEMO.lat, lng: JUDGE_DEMO.lng };
+    setPin(demoPin);
+    setPlaceName(JUDGE_DEMO.placeName);
+    if (map) { map.panTo(demoPin); map.setZoom(16); }
+    setLoading(true);
+    setProgress(8);
+    const tick = setInterval(()=> setProgress(p=> Math.min(92, p + (p<40?7: p<70?3:1))), 900);
+    try {
+      const res = await fetch('/api/prediction/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lat: demoPin.lat, lng: demoPin.lng, worldId, placeName: JUDGE_DEMO.placeName })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.details || data.error || 'Failed');
+      setPredictionData(data);
+    } catch (err) {
+      console.error(err);
+      alert('Error: ' + err.message);
+    } finally { clearInterval(tick); setProgress(100); setTimeout(()=> setProgress(0), 1200); setLoading(false); }
+  };
+
   const handleGenerate = async () => {
     if (!pin) return;
     setLoading(true);
-    
+    setProgress(12);
+    const tick = setInterval(()=> setProgress(p=> Math.min(88, p + (p<45?6:2))), 1000);
     try {
       const res = await fetch('/api/prediction/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ lat: pin.lat, lng: pin.lng, worldId, placeName })
       });
-      
       const data = await res.json();
       if (!res.ok) throw new Error(data.details || data.error || 'Failed to generate prediction');
-      
       setPredictionData(data);
     } catch (err) {
       console.error(err);
       alert('Error generating Earth prediction: ' + err.message);
-    } finally {
-      setLoading(false);
-    }
+    } finally { clearInterval(tick); setProgress(100); setTimeout(()=> setProgress(0), 1000); setLoading(false); }
   };
 
   return (
@@ -103,9 +128,26 @@ function PredictionInner() {
         <h1 style={{ fontSize: '22px', fontWeight: '900', marginBottom: '6px', color: 'var(--text-primary)', lineHeight:1.1 }}>
           🌍 EARTH LENS <span style={{ color:'#10b981' }}>2036</span>
         </h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '20px', lineHeight:1.5 }}>
+        <div style={{ display:'flex', gap:'8px', marginBottom:'10px' }}>
+          <button onClick={handleDemo} disabled={loading} style={{ flex:1, padding:'11px 10px', background:'linear-gradient(135deg,#10b981,#059669)', color:'#fff', border:'none', borderRadius:'10px', fontWeight:800, fontSize:'13px', cursor: loading?'not-allowed':'pointer', opacity: loading?0.6:1, display:'flex', alignItems:'center', justifyContent:'center', gap:'6px' }}><Zap size={14} /> Try Delhi in 1 Click</button>
+          <button onClick={()=>setShowTutorial(true)} title="Show guide" style={{ padding:'11px 12px', background:'var(--bg-card)', border:'1px solid var(--border-subtle)', borderRadius:'10px', cursor:'pointer', color:'var(--text-secondary)' }}><HelpCircle size={16} /></button>
+        </div>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '11px', marginBottom: '14px', textAlign:'center' }}>⏱️ 60-90s build • Judges: use demo for instant result</p>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '16px', lineHeight:1.5 }}>
           See your street in a <strong style={{color:'var(--text-primary)'}}>+2°C world</strong>. GEE satellites track NDVI/NDBI/LST for 10 years, Gemini predicts dystopia vs green future, AI panoramas make it <em>feel</em> real.
+          <span title="NDVI=vegetation, NDBI=concrete, LST=surface heat — satellite health metrics" style={{ textDecoration:'underline dotted', cursor:'help', marginLeft:6, fontSize:'11px', color:'var(--text-muted)' }}>What’s NDVI/LST?</span>
         </p>
+        {progress>0 && loading && (
+          <div style={{ marginBottom:'14px', background:'var(--bg-primary)', border:'1px solid var(--border-subtle)', borderRadius:'10px', padding:'10px 12px' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:'11px', fontWeight:800, marginBottom:6 }}>
+              <span style={{ color:'var(--text-secondary)' }}>{progress<30?'🛰️ Scanning GEE…':progress<60?'🧠 Gemini eco-report…':'🎨 Building 360° panoramas…'}</span>
+              <span style={{ color:'#10b981' }}>{progress}%</span>
+            </div>
+            <div style={{ height:6, background:'var(--bg-tertiary)', borderRadius:'999px', overflow:'hidden' }}>
+              <div style={{ height:'100%', width:`${progress}%`, background:'linear-gradient(90deg,#10b981,#06b6d4)', transition:'width 600ms ease' }} />
+            </div>
+          </div>
+        )}
 
         {isLoaded && !predictionData ? (
           <div style={{ marginBottom: '18px' }}>
@@ -123,7 +165,15 @@ function PredictionInner() {
 
         {!predictionData && (
           <div style={{ flex: 1 }}>
-             {!pin && <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontStyle: 'italic' }}>📍 Click on the satellite map to plant your Earth probe. 500m zone will be eco-scanned.</p>}
+             {!pin && (
+               <div style={{ background:'rgba(16,185,129,0.06)', border:'1px dashed rgba(16,185,129,0.25)', borderRadius:'12px', padding:'12px', display:'flex', gap:'10px' }}>
+                 <span style={{ fontSize:'18px' }}>👆</span>
+                 <div>
+                   <div style={{ fontSize:'13px', fontWeight:700, color:'var(--text-primary)' }}>Step 1: Plant your probe</div>
+                   <p style={{ color: 'var(--text-muted)', fontSize: '12px', margin:0 }}>Click the satellite map or search a city. Violet box = 500m eco-scan zone.</p>
+                 </div>
+               </div>
+             )}
              {pin && (
                <div style={{ padding: '14px', backgroundColor: 'var(--bg-primary)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(16,185,129,0.3)' }}>
                  <h3 style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '6px', color: '#10b981', display:'flex', alignItems:'center', gap:'6px' }}><Leaf size={14}/> Probe Planted — Eco-Scan Ready</h3>
@@ -232,7 +282,22 @@ function PredictionInner() {
              <Loader2 size={32} style={{ animation: 'spin 1s linear infinite', color: 'var(--text-muted)' }} />
            </div>
         )}
+        {!pin && !predictionData && (
+          <div style={{ position:'absolute', bottom:20, left:'50%', transform:'translateX(-50%)', background:'var(--bg-secondary)', border:'1px solid var(--border-subtle)', borderRadius:'12px', padding:'10px 14px', display:'flex', alignItems:'center', gap:'10px', boxShadow:'var(--shadow-lg)', fontSize:'12px', color:'var(--text-secondary)', maxWidth:'90%', zIndex:5 }}>
+            <span style={{ background:'#10b981', color:'#fff', padding:'4px 8px', borderRadius:'20px', fontSize:'10px', fontWeight:800, whiteSpace:'nowrap' }}>TIP FOR JUDGES</span>
+            <span>Click map to plant probe • or </span>
+            <button onClick={handleDemo} style={{ background:'linear-gradient(135deg,#10b981,#059669)', color:'#fff', border:'none', padding:'6px 10px', borderRadius:'8px', fontWeight:800, cursor:'pointer', whiteSpace:'nowrap' }}>Try Delhi 1-Click →</button>
+          </div>
+        )}
       </div>
+
+      <EarthTutorial autoOpen={true} storageKey="terraplot-prediction-tutorial-v2" />
+      {showTutorial && (
+        <div style={{ position:'fixed', inset:0, zIndex:210 }}>
+          <EarthTutorial autoOpen={true} storageKey="terraplot-prediction-tutorial-manual" />
+          <button onClick={()=>setShowTutorial(false)} style={{ position:'fixed', top:16, right:16, zIndex:220, width:36, height:36, borderRadius:'50%', background:'var(--bg-secondary)', border:'1px solid var(--border-subtle)', cursor:'pointer' }}>×</button>
+        </div>
+      )}
     </div>
   );
 }

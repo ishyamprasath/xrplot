@@ -93,7 +93,7 @@ function EarthLanding() {
         </div>
       </section>
 
-      <section style={{ position:'relative', zIndex:2, maxWidth:'1200px', margin:'0 auto', padding:'8px 32px 48px', display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'16px' }}>
+      <section style={{ position:'relative', zIndex:2, maxWidth:'1200px', margin:'0 auto', padding:'8px 32px 16px', display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'16px' }}>
         {[
           { icon:'🛰️', title:'Satellite-Grounded', desc:'Real GEE time-series drives math, not vibes. NDBI up = NDVI down = LST up.' },
           { icon:'🎨', title:'Feel, Don’t Just Chart', desc:'6 photorealistic 360° panoramas make heat/flood/smog visceral — walk the future.' },
@@ -105,6 +105,32 @@ function EarthLanding() {
             <div style={{ fontSize:'13px', color:'var(--text-secondary)', lineHeight:1.5 }}>{f.desc}</div>
           </div>
         ))}
+      </section>
+
+      <section style={{ position:'relative', zIndex:2, maxWidth:'1200px', margin:'0 auto', padding:'0 32px 32px' }}>
+        <div style={{ background:'var(--bg-secondary)', border:'1px solid var(--border-subtle)', borderRadius:'20px', padding:'20px 22px', display:'grid', gridTemplateColumns:'1fr auto', gap:'20px', alignItems:'center' }}>
+          <div>
+            <div style={{ fontSize:'11px', fontWeight:800, letterSpacing:'0.7px', color:'#10b981', marginBottom:6 }}>🧭 JUDGE QUICK START — 4 STEPS • 60 SECONDS</div>
+            <div style={{ display:'flex', gap:'10px', flexWrap:'wrap' }}>
+              {[
+                { n:'1', t:'Plant probe', d:'Click map or Try Delhi' },
+                { n:'2', t:'Scan', d:'GEE NDVI/LST 60s' },
+                { n:'3', t:'Walk twin', d:'6 nodes 360°' },
+                { n:'4', t:'Ask agent', d:'Fix: -2.4°C' },
+              ].map(s=>(
+                <div key={s.n} style={{ display:'flex', gap:'8px', alignItems:'center', background:'var(--bg-card)', border:'1px solid var(--border-subtle)', borderRadius:'12px', padding:'10px 12px', minWidth:'140px' }}>
+                  <span style={{ width:26, height:26, borderRadius:'50%', background:'linear-gradient(135deg,#10b981,#059669)', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:900, fontSize:'12px' }}>{s.n}</span>
+                  <div><div style={{ fontSize:'12px', fontWeight:800, color:'var(--text-primary)' }}>{s.t}</div><div style={{ fontSize:'11px', color:'var(--text-muted)' }}>{s.d}</div></div>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop:'10px', fontSize:'11px', color:'var(--text-muted)' }}><span title="Normalized Difference Vegetation/Built-up Index + Land Surface Temp" style={{ textDecoration:'underline dotted', cursor:'help' }}>NDVI/NDBI/LST</span> = satellite health • Blue = search any city • Violet box = 500m scan zone</div>
+          </div>
+          <div style={{ textAlign:'right', minWidth:'160px' }}>
+            <Link href="/prediction" style={{ display:'inline-flex', background:'linear-gradient(135deg,#10b981,#059669)', color:'#fff', padding:'12px 18px', borderRadius:'12px', fontWeight:900, textDecoration:'none', boxShadow:'0 8px 24px rgba(16,185,129,0.3)' }}>🌍 Launch Now →</Link>
+            <div style={{ fontSize:'11px', color:'var(--text-muted)', marginTop:8 }}>No login wall • Demo pre-pinned</div>
+          </div>
+        </div>
       </section>
 
       <footer style={{ position:'relative', zIndex:2, borderTop:'1px solid var(--border-subtle)', padding:'18px 32px', display:'flex', justifyContent:'space-between', flexWrap:'wrap', gap:'12px', maxWidth:'1200px', margin:'0 auto', fontSize:'12px', color:'var(--text-muted)' }}>
